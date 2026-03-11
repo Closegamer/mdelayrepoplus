@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db import Base, SessionLocal, engine
 from app.models import Message
-from app.schemas import HealthOut, MessageCreate, MessageOut
+from app.schemas import ActiveCheckOut, HealthOut, MessageCreate, MessageOut, MessageResponseIn
 
 app = FastAPI(title="mDelayPlusBot API", version="0.1.0")
 
@@ -70,3 +70,77 @@ def delete_message_endpoint(
     db.commit()
     if deleted == 0:
         raise HTTPException(status_code=404, detail="Message not found")
+
+@app.post("/api/messages/response", response_model=MessageOut)
+def respond_endpoint(payload: MessageResponseIn, db: Session = Depends(get_db)) -> MessageOut:
+    pending = (
+        db.query(Message)
+        .filter(
+            Message.userid == payload.user_id,
+            Message.check1_time.is_not(None),
+            (
+                (Message.check1_res == "SENT")
+                | (Message.check2_res == "SENT")
+                | (Message.check3_res == "SENT")
+            ),
+        )
+        .order_by(Message.id.desc())
+        .first()
+    )
+    if not pending:
+        raise HTTPException(status_code=404, detail="No active check for this user")
+
+    answer = payload.response_text.strip()
+    is_ok = answer in ("Я в порядке", "Я в порядке.", "я в порядке", "я в порядке.")
+    value = "Я в порядке" if is_ok else answer
+
+    if pending.check1_res == "SENT":
+        pending.check1_res = value
+        pending.check1_is_text = True
+    elif pending.check2_res == "SENT":
+        pending.check2_res = value
+        pending.check2_is_text = True
+    elif pending.check3_res == "SENT":
+        pending.check3_res = value
+        pending.check3_is_text = True
+
+    if not is_ok:
+        pending.check3_res = "ESCALATED"
+        pending.check3_is_text = False
+
+    db.commit()
+    db.refresh(pending)
+    return _to_out(pending)
+    
+@app.get("/api/users/{user_id}/active-check", response_model=ActiveCheckOut)
+def active_check_endpoint(user_id: int, db: Session = Depends(get_db)) -> ActiveCheckOut:
+    pending = (
+        db.query(Message)
+        .filter(
+            Message.userid == user_id,
+            Message.check1_time.is_not(None),
+            (
+                (Message.check1_res == "SENT")
+                | (Message.check2_res == "SENT")
+                | (Message.check3_res == "SENT")
+            ),
+        )
+        .order_by(Message.id.desc())
+        .first()
+    )
+    if not pending:
+        raise HTTPException(status_code=404, detail="No active check")
+
+    if pending.check1_res == "SENT":
+        check_no = 1
+    elif pending.check2_res == "SENT":
+        check_no = 2
+    else:
+        check_no = 3
+
+    return ActiveCheckOut(
+        message_id=pending.id,
+        check_no=check_no,
+        source_message=pending.message,
+        response_deadline_seconds=60,
+    )
