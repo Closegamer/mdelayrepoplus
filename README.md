@@ -7,6 +7,7 @@
 ## Этапы создания бота
 
 - FastAPI backend
+- DB 
 - Telegram bot
 - Cron
 - Admin page
