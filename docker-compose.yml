@@ -27,11 +27,11 @@ services:
       - .:/app
     ports:
       - "8000:8000"
-  telegram-bot:
+  bot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mdelayrepoplus-telegram-bot
+    container_name: mdelayrepoplus-bot
     restart: unless-stopped
     env_file:
       - .env

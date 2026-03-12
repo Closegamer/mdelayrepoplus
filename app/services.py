@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Callable
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import Message
@@ -157,3 +158,52 @@ def worker_step(
                 row.check3_res = ESCALATED_TEXT
                 row.check3_is_text = False
     db.commit()
+
+def _active_condition():
+    return and_(
+        or_(Message.check3_res.is_(None), Message.check3_res != ESCALATED_TEXT),
+        or_(Message.check1_res.is_(None), Message.check1_res != OK_TEXT),
+        or_(Message.check2_res.is_(None), Message.check2_res != OK_TEXT),
+        or_(Message.check3_res.is_(None), Message.check3_res != OK_TEXT),
+    )
+
+def list_recent_messages(db: Session, limit: int, offset: int) -> list[Message]:
+    return db.query(Message).order_by(Message.id.desc()).offset(offset).limit(limit).all()
+
+def list_alert_messages(db: Session, limit: int, offset: int) -> list[Message]:
+    return (
+        db.query(Message)
+        .filter(Message.check3_res == ESCALATED_TEXT)
+        .order_by(Message.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+def list_active_checks(db: Session, limit: int, offset: int) -> list[Message]:
+    return (
+        db.query(Message)
+        .filter(_active_condition())
+        .order_by(Message.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+def get_admin_overview(db: Session) -> dict:
+    total_messages = db.query(func.count(Message.id)).scalar() or 0
+    total_users = db.query(func.count(func.distinct(Message.userid))).scalar() or 0
+    total_alerts = db.query(func.count(Message.id)).filter(Message.check3_res == ESCALATED_TEXT).scalar() or 0
+    active_checks = db.query(func.count(Message.id)).filter(_active_condition()).scalar() or 0
+    check1_sent = db.query(func.count(Message.id)).filter(Message.check1_res == SENT_TEXT).scalar() or 0
+    check2_sent = db.query(func.count(Message.id)).filter(Message.check2_res == SENT_TEXT).scalar() or 0
+    check3_sent = db.query(func.count(Message.id)).filter(Message.check3_res == SENT_TEXT).scalar() or 0
+    return {
+        "total_messages": int(total_messages),
+        "total_users": int(total_users),
+        "total_alerts": int(total_alerts),
+        "active_checks": int(active_checks),
+        "check1_sent": int(check1_sent),
+        "check2_sent": int(check2_sent),
+        "check3_sent": int(check3_sent),
+    }

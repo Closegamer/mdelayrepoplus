@@ -2,8 +2,18 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.db import Base, SessionLocal, engine
 from app.models import Message
-from app.schemas import ActiveCheckOut, HealthOut, MessageCreate, MessageOut, MessageResponseIn
-from app.services import create_message, delete_user_message, get_active_check_for_user, list_user_messages, submit_response
+from app.schemas import ActiveCheckOut, AdminOverviewOut, HealthOut, MessageCreate, MessageOut, MessageResponseIn
+from app.services import (
+    create_message,
+    delete_user_message,
+    get_active_check_for_user,
+    get_admin_overview,
+    list_active_checks,
+    list_alert_messages,
+    list_recent_messages,
+    list_user_messages,
+    submit_response,
+)
 
 app = FastAPI(title="mDelayPlusBot API", version="0.1.0")
 
@@ -81,3 +91,34 @@ def active_check_endpoint(user_id: int, db: Session = Depends(get_db)) -> Active
     if not active:
         raise HTTPException(status_code=404, detail="No active check")
     return ActiveCheckOut(**active)
+
+@app.get("/api/admin/overview", response_model=AdminOverviewOut)
+def admin_overview_endpoint(db: Session = Depends(get_db)) -> AdminOverviewOut:
+    return AdminOverviewOut(**get_admin_overview(db))
+
+@app.get("/api/admin/messages", response_model=list[MessageOut])
+def admin_messages_endpoint(
+    limit: int = Query(24, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[MessageOut]:
+    rows = list_recent_messages(db, limit=limit, offset=offset)
+    return [_to_out(item) for item in rows]
+
+@app.get("/api/admin/alerts", response_model=list[MessageOut])
+def admin_alerts_endpoint(
+    limit: int = Query(24, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[MessageOut]:
+    rows = list_alert_messages(db, limit=limit, offset=offset)
+    return [_to_out(item) for item in rows]
+
+@app.get("/api/admin/active-checks", response_model=list[MessageOut])
+def admin_active_checks_endpoint(
+    limit: int = Query(24, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[MessageOut]:
+    rows = list_active_checks(db, limit=limit, offset=offset)
+    return [_to_out(item) for item in rows]
