@@ -1,7 +1,7 @@
 import logging
 import os
 import requests
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
@@ -183,11 +183,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.exception("Failed to delete message")
         await query.edit_message_text("Ошибка удаления сообщения.")
 
+async def setup_bot_commands(application: Application) -> None:
+    try:
+        await application.bot.set_my_commands([BotCommand("start", "Запуск главного меню")])
+    except Exception:
+        logger.exception("Failed to set bot commands")
+
 def main() -> None:
     token = os.getenv("BOT_TOKEN")
     if not token:
         raise RuntimeError("BOT_TOKEN is not set")
-    app = Application.builder().token(token).build()
+    app = Application.builder().token(token).post_init(setup_bot_commands).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
