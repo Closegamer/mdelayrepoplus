@@ -54,6 +54,21 @@ services:
     command: python -m cron.main
     volumes:
       - .:/app
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mdelayrepoplus-ui
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - api
+    command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
 
 volumes:
   postgres_data:

@@ -1,6 +1,5 @@
 import logging
 import time
-
 import requests
 
 from app.config import settings
