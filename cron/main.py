@@ -13,7 +13,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 def _send_telegram_message(chat_id: int | str, text: str) -> bool:
     if not settings.bot_token:
         logger.warning("BOT_TOKEN is not set, skip telegram send")
@@ -29,7 +28,6 @@ def _send_telegram_message(chat_id: int | str, text: str) -> bool:
         logger.exception("Telegram send failed")
         return False
 
-
 def _send_check(row, check_no: int) -> bool:
     text = (
         f"Проверка {check_no}/3.\n\n"
@@ -39,7 +37,6 @@ def _send_check(row, check_no: int) -> bool:
         f"Ваше исходное сообщение:\n{row.message}"
     )
     return _send_telegram_message(row.userid, text)
-
 
 def _send_escalation(row) -> bool:
     if not settings.alert_chat_id:
@@ -55,14 +52,12 @@ def _send_escalation(row) -> bool:
     )
     return _send_telegram_message(settings.alert_chat_id, text)
 
-
 def run_once() -> None:
     db = SessionLocal()
     try:
         worker_step(db, on_send_check=_send_check, on_send_escalation=_send_escalation)
     finally:
         db.close()
-
 
 def main() -> None:
     Base.metadata.create_all(bind=engine)
@@ -73,7 +68,6 @@ def main() -> None:
         except Exception:
             logger.exception("Cron iteration failed")
         time.sleep(settings.scheduler_poll_seconds)
-
 
 if __name__ == "__main__":
     main()
