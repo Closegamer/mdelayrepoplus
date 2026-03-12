@@ -40,6 +40,34 @@ def ensure_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     if STATE_KEY not in context.user_data:
         context.user_data[STATE_KEY] = STATE_IDLE
 
+def message_tracking_status(item: dict) -> str:
+    is_finished = item.get("check3_res") == "ESCALATED" or any(
+        item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")
+    )
+    return "Завершено" if is_finished else "Выполняется"
+
+def message_result_status(item: dict) -> str:
+    if any(item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")):
+        return "Порядок"
+    if item.get("check3_res") == "ESCALATED":
+        return "Тревога"
+    return "-"
+
+async def try_submit_check_response(update: Update, text: str) -> bool:
+    user = update.effective_user
+    if not user:
+        return False
+    active_response = api_get(f"/api/users/{user.id}/active-check")
+    if active_response.status_code == 404:
+        return False
+    if not active_response.ok:
+        raise RuntimeError(f"active-check status {active_response.status_code}")
+    submit_response = api_post("/api/messages/response", {"user_id": user.id, "response_text": text})
+    if not submit_response.ok:
+        raise RuntimeError(f"response submit status {submit_response.status_code}")
+    await update.message.reply_text("Ответ принят. Спасибо.", reply_markup=main_menu_keyboard())
+    return True
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
     context.user_data[STATE_KEY] = STATE_IDLE
@@ -63,7 +91,13 @@ async def show_user_messages(update: Update) -> None:
             return
         await update.message.reply_text(f"Ваши сообщения ({len(items)}):", reply_markup=main_menu_keyboard())
         for idx, item in enumerate(items, start=1):
-            text = f"{idx}. Текст: {item.get('message', '')}"
+            tracking = message_tracking_status(item)
+            result = message_result_status(item)
+            text = (
+                f"{idx}. Текст: {item.get('message', '')}\n"
+                f"Слежение: {tracking}\n"
+                f"Результат: {result}"
+            )
             await update.message.reply_text(text, reply_markup=message_delete_keyboard(item["id"]))
     except Exception:
         logger.exception("Failed to load messages")
@@ -81,6 +115,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data[STATE_KEY] = STATE_IDLE
         await show_user_messages(update)
         return
+    if state == STATE_IDLE:
+        try:
+            accepted = await try_submit_check_response(update, text)
+            if accepted:
+                return
+        except Exception:
+            logger.exception("Failed to submit check response")
+            await update.message.reply_text("Не удалось отправить ответ на проверку.", reply_markup=main_menu_keyboard())
+            return
     if state == STATE_WAIT_MESSAGE:
         user = update.effective_user
         if not user:
