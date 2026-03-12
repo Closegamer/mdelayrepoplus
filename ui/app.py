@@ -4,11 +4,29 @@ import streamlit as st
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 TIMEOUT_SECONDS = 15
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
 def api_get(path: str, params: dict | None = None):
     response = requests.get(f"{API_BASE_URL}{path}", params=params, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json()
+
+def ensure_auth_state() -> None:
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+
+def render_login() -> bool:
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        with st.form("admin_login_form", clear_on_submit=False):
+            password = st.text_input("Пароль администратора", type="password", placeholder="Введите пароль")
+            submitted = st.form_submit_button("Войти", use_container_width=True)
+        if submitted:
+            if password == ADMIN_PASSWORD and ADMIN_PASSWORD:
+                st.session_state.logged_in = True
+                st.rerun()
+            st.error("Неверный пароль.")
+    return st.session_state.logged_in
 
 def render_overview() -> None:
     overview = api_get("/api/admin/overview")
@@ -32,7 +50,14 @@ def render_table(title: str, endpoint: str, page_size: int) -> None:
 
 def main() -> None:
     st.set_page_config(page_title="mDelayPlusBot Admin", layout="wide")
+    ensure_auth_state()
+    if not st.session_state.logged_in:
+        render_login()
+        return
     st.title("mDelayPlusBot - Центр мониторинга и управления")
+    if st.button("Выйти"):
+        st.session_state.logged_in = False
+        st.rerun()
     page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
     st.button("Применить")
     try:
