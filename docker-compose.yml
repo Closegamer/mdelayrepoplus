@@ -40,6 +40,20 @@ services:
     command: python -m bot.main
     volumes:
       - .:/app
+  cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mdelayrepoplus-cron
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - api
+    command: python -m cron.main
+    volumes:
+      - .:/app
 
 volumes:
   postgres_data:
