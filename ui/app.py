@@ -32,7 +32,6 @@ def render_login() -> bool:
         st.write("")
     left, center, right = st.columns([2, 3, 2])
     with center:
-        st.markdown("<div style='text-align:center;'>Введите пароль администратора</div>", unsafe_allow_html=True)
         with st.form("admin_login_form", clear_on_submit=False):
             password = st.text_input(
                 "Пароль администратора",
@@ -114,6 +113,13 @@ def render_filters() -> int:
         st.rerun()
     return page_size
 
+def render_footer() -> None:
+    st.markdown("---")
+    st.markdown(
+        "<div style='text-align:center;'>writtenBy(Closegamer, 2026, All rights reserved)</div>",
+        unsafe_allow_html=True,
+    )
+
 def main() -> None:
     st.set_page_config(page_title="mDelayPlusBot Admin", layout="wide")
     ensure_auth_state()
@@ -133,6 +139,7 @@ def main() -> None:
             render_table("Активные проверки", "/api/admin/active-checks", page_size, "active_offset")
     except Exception as exc:
         st.error(f"Ошибка загрузки данных: {exc}")
+    render_footer()
 
 if __name__ == "__main__":
     main()
