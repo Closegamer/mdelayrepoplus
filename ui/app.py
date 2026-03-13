@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import requests
 import streamlit as st
 
@@ -125,18 +126,47 @@ def row_result_status(item: dict) -> str:
         return "Тревога"
     return "-"
 
+def format_tracking_badge(value: str) -> str:
+    if value == "Выполняется":
+        return "🟠 Выполняется"
+    return "✅ Завершено"
+
+def format_result_badge(value: str) -> str:
+    if value == "Порядок":
+        return "🟢 Порядок"
+    if value == "Тревога":
+        return "🔴 Тревога"
+    return "⚪ -"
+
+def shorten_message(value: str, limit: int = 90) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1].rstrip() + "…"
+
+def format_created_at(value: str | None) -> str:
+    if not value:
+        return "-"
+    raw = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+        return dt.strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        return value
+
 def map_table_rows(rows: list[dict]) -> list[dict]:
     mapped = []
     for item in rows:
+        tracking = row_tracking_status(item)
+        result = row_result_status(item)
         mapped.append(
             {
                 "ID": item.get("id"),
                 "UserID": item.get("user_id"),
                 "Username": item.get("username") or "-",
-                "Сообщение": item.get("message") or "",
-                "Создано": item.get("timecreated") or "",
-                "Слежение": row_tracking_status(item),
-                "Результат": row_result_status(item),
+                "Сообщение": shorten_message(item.get("message") or ""),
+                "Создано": format_created_at(item.get("timecreated")),
+                "Слежение": format_tracking_badge(tracking),
+                "Результат": format_result_badge(result),
             }
         )
     return mapped
