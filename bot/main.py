@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timezone
 import requests
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
@@ -14,6 +15,22 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+def start_text(first_name: str) -> str:
+    return (
+        "ВНИМАНИЕ! БОТ РАБОТАЕТ В ТЕСТОВОМ РЕЖИМЕ! ЗАПРОСЫ ПРИХОДЯТ 1 РАЗ В МИНУТУ!\n\n"
+        f"Здравствуйте, {first_name}! Вас приветствует бот mDelay!\n\n"
+        "Если Вы собираетесь в опасное путешествие или в подозрительное место, "
+        "Вы можете оставить сообщение, которое поможет Вас найти в случае непредвиденной ситуации "
+        "или при отсутствии у Вас связи.\n\n"
+        "Через определенное время бот спросит, как у Вас дела.\n\n"
+        "Если Вы ответите на любой из запросов фразой \"Я в порядке\", бот прекратит следить за данным сообщением.\n\n"
+        "Если Вы ответите что-то другое, бот сразу передаст сообщение службе спасения.\n\n"
+        "Если Вы не ответите на все три запроса, бот передаст исходное сообщение службе спасения.\n\n"
+        "В первый раз бот спросит Вас через 5 часов, во второй раз - еще через 2 часа, в третий раз - еще через 1 час.\n\n"
+        "Удачи Вам! Не теряйтесь - кому-то может быть без Вас грустно!\n\n"
+        "ВНИМАНИЕ! БОТ РАБОТАЕТ В ТЕСТОВОМ РЕЖИМЕ! ЗАПРОСЫ ПРИХОДЯТ 1 РАЗ В МИНУТУ!"
+    )
 
 def api_get(path: str, params: dict | None = None) -> requests.Response:
     return requests.get(f"{API_BASE_URL}{path}", params=params, timeout=15)
@@ -65,14 +82,16 @@ async def try_submit_check_response(update: Update, text: str) -> bool:
     submit_response = api_post("/api/messages/response", {"user_id": user.id, "response_text": text})
     if not submit_response.ok:
         raise RuntimeError(f"response submit status {submit_response.status_code}")
-    await update.message.reply_text("Ответ принят. Спасибо.", reply_markup=main_menu_keyboard())
+    await update.message.reply_text("Ответ на проверку сохранен.", reply_markup=main_menu_keyboard())
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
     context.user_data[STATE_KEY] = STATE_IDLE
+    user = update.effective_user
+    first_name = (user.first_name if user else None) or "<Ваше имя не распознано>"
     await update.message.reply_text(
-        "Здравствуйте! mDelayPlusBot запущен.\nВыберите действие в меню.",
+        start_text(first_name),
         reply_markup=main_menu_keyboard(),
     )
 
@@ -95,6 +114,7 @@ async def show_user_messages(update: Update) -> None:
             result = message_result_status(item)
             text = (
                 f"{idx}. Текст: {item.get('message', '')}\n"
+                f"Время отправки: {item.get('timecreated', '-')}\n"
                 f"Слежение: {tracking}\n"
                 f"Результат: {result}"
             )
@@ -134,6 +154,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text("Пустой текст. Введите сообщение еще раз.")
             return
         try:
+            sent_at = (update.message.date if update.message else None) or datetime.now(timezone.utc)
             response = api_post(
                 "/api/messages",
                 {
@@ -147,14 +168,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             if not response.ok:
                 raise RuntimeError(f"api status {response.status_code}")
             context.user_data[STATE_KEY] = STATE_IDLE
-            await update.message.reply_text("Сообщение сохранено.", reply_markup=main_menu_keyboard())
+            sender_username = f"@{user.username}" if user.username else "-"
+            sender_name = " ".join(x for x in [user.first_name, user.last_name] if x) or "Пользователь"
+            await update.message.reply_text(
+                "Сообщение сохранено.\n\n"
+                f"Текст: {text}\n"
+                f"Отправитель: {sender_name} (username: {sender_username}, id: {user.id})\n"
+                f"Время отправки: {sent_at}",
+                reply_markup=main_menu_keyboard(),
+            )
             return
         except Exception:
             logger.exception("Failed to create message")
-            await update.message.reply_text("Не удалось сохранить сообщение.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text("Не удалось сохранить сообщение в базу.", reply_markup=main_menu_keyboard())
             context.user_data[STATE_KEY] = STATE_IDLE
             return
-    await update.message.reply_text("Используйте /start или кнопки меню.", reply_markup=main_menu_keyboard())
+    await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard())
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -185,7 +214,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def setup_bot_commands(application: Application) -> None:
     try:
-        await application.bot.set_my_commands([BotCommand("start", "Запуск главного меню")])
+        await application.bot.set_my_commands([BotCommand("start", "Главное меню")])
     except Exception:
         logger.exception("Failed to set bot commands")
 

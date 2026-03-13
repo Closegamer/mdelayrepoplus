@@ -29,10 +29,10 @@ def _send_telegram_message(chat_id: int | str, text: str) -> bool:
         return False
 
 def _send_check(row, check_no: int) -> bool:
-    source_message = escape(row.message or "")
+    source_message = escape(str(row.message or ""))
     text = (
         f"Проверка {check_no}/3.\n\n"
-        "<b>Как у Вас дела?</b>\n\n"
+        "🔔 <b>КАК У ВАС ДЕЛА?</b>\n\n"
         "Если всё хорошо, напишите фразу \"Я в порядке\"\n\n"
         "Если у Вас проблема, но Вы можете ответить, - опишите проблему текстом.\n\n"
         f"Ваше исходное сообщение:\n{source_message}"
@@ -43,13 +43,17 @@ def _send_escalation(row) -> bool:
     if not settings.alert_chat_id:
         logger.warning("ALERT_CHAT_ID is not set, skip escalation")
         return False
-    username_text = f"@{escape(row.username)}" if row.username else "-"
-    source_message = escape(row.message or "")
+    username_text = f"@{escape(str(row.username))}" if row.username else "-"
+    user_title = " ".join(x for x in [row.firstname, row.lastname] if x) or "Пользователь"
+    created_text = escape(str(row.timecreated))
+    source_message = escape(str(row.message or ""))
     text = (
         "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
         f"ID сообщения: {row.id}\n"
         f"User id: {row.userid}\n"
         f"Username: {username_text}\n\n"
+        f"Имя: {escape(user_title)}\n\n"
+        f"Время создания сообщения: {created_text}\n\n"
         f"Текст сообщения:\n{source_message}"
     )
     return _send_telegram_message(settings.alert_chat_id, text)
