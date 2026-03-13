@@ -171,6 +171,23 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
         )
     return mapped
 
+def filter_table_rows(rows: list[dict], query: str) -> list[dict]:
+    needle = query.strip().lower()
+    if not needle:
+        return rows
+    filtered = []
+    for row in rows:
+        haystack = " ".join(
+            [
+                str(row.get("UserID", "")),
+                str(row.get("Username", "")),
+                str(row.get("Сообщение", "")),
+            ]
+        ).lower()
+        if needle in haystack:
+            filtered.append(row)
+    return filtered
+
 def ensure_page_offset_state(key: str) -> None:
     if key not in st.session_state:
         st.session_state[key] = 0
@@ -186,7 +203,18 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
             st.session_state[page_key] = max(0, offset - page_size)
             st.rerun()
         return
-    st.table(map_table_rows(rows))
+    search_query = st.text_input(
+        "Фильтр (UserID / Username / текст)",
+        value="",
+        key=f"{page_key}_filter",
+        placeholder="Например: 227287028 или closegamer",
+    )
+    mapped_rows = map_table_rows(rows)
+    filtered_rows = filter_table_rows(mapped_rows, search_query)
+    if not filtered_rows:
+        st.info("По фильтру ничего не найдено.")
+    else:
+        st.table(filtered_rows)
     page_number = (offset // page_size) + 1
     _, nav_left, nav_center, nav_right, _ = st.columns([2, 2, 2, 2, 2], vertical_alignment="center")
     with nav_left:
