@@ -1,4 +1,7 @@
 import os
+import hashlib
+import hmac
+import time
 from datetime import datetime, timedelta
 import requests
 import streamlit as st
@@ -6,6 +9,26 @@ import streamlit as st
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 TIMEOUT_SECONDS = 15
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+LOGIN_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
+
+def make_login_token(password: str, timestamp: int | None = None) -> str:
+    ts = int(timestamp or time.time())
+    payload = str(ts).encode("utf-8")
+    digest = hmac.new(password.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+    return f"{ts}.{digest}"
+
+def is_login_token_valid(password: str, token: str) -> bool:
+    if not password or not token or "." not in token:
+        return False
+    ts_text, signature = token.split(".", 1)
+    if not ts_text.isdigit():
+        return False
+    ts = int(ts_text)
+    now = int(time.time())
+    if ts > now or (now - ts) > LOGIN_TOKEN_MAX_AGE_SECONDS:
+        return False
+    expected = make_login_token(password, ts).split(".", 1)[1]
+    return hmac.compare_digest(signature, expected)
 
 def inject_global_styles() -> None:
     st.markdown(
@@ -52,6 +75,12 @@ def api_delete(path: str):
 def ensure_auth_state() -> None:
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
+    if "admin_password" not in st.session_state:
+        st.session_state.admin_password = ADMIN_PASSWORD
+    configured_password = st.session_state.get("admin_password", "")
+    auth_token = st.query_params.get("auth", "")
+    if is_login_token_valid(configured_password, auth_token):
+        st.session_state.logged_in = True
 
 def render_login() -> bool:
     st.markdown(
@@ -71,16 +100,20 @@ def render_login() -> bool:
     left, center, right = st.columns([2, 3, 2])
     with center:
         with st.form("admin_login_form", clear_on_submit=False):
-            password = st.text_input(
+            st.text_input(
                 "Пароль администратора",
                 type="password",
                 placeholder="Стой, кто идет?",
                 label_visibility="collapsed",
+                key="admin_password_input",
             )
             submitted = st.form_submit_button("Войти", use_container_width=True)
         if submitted:
-            if password == ADMIN_PASSWORD and ADMIN_PASSWORD:
+            entered_password = st.session_state.get("admin_password_input", "")
+            configured_password = st.session_state.get("admin_password", "")
+            if entered_password == configured_password and configured_password:
                 st.session_state.logged_in = True
+                st.query_params["auth"] = make_login_token(configured_password)
                 st.rerun()
             st.error("Неверный пароль.")
     return st.session_state.logged_in
@@ -252,6 +285,8 @@ def render_header() -> None:
     with right:
         if st.button("Выйти", use_container_width=True):
             st.session_state.logged_in = False
+            if "auth" in st.query_params:
+                del st.query_params["auth"]
             st.rerun()
 
 def render_filters() -> int:
