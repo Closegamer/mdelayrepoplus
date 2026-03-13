@@ -76,15 +76,24 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
     is_ok = _normalize_ok_text(answer) == _normalize_ok_text(OK_TEXT)
     value = OK_TEXT if is_ok else answer
     pending.user_response_text = answer
-    if pending.check1_res == SENT_TEXT:
+    active_check_no = 0
+    if pending.check3_res == SENT_TEXT:
+        active_check_no = 3
+    elif pending.check2_res == SENT_TEXT:
+        active_check_no = 2
+    elif pending.check1_res == SENT_TEXT:
+        active_check_no = 1
+    if active_check_no == 1:
         pending.check1_res = value
         pending.check1_is_text = True
-    elif pending.check2_res == SENT_TEXT:
+    elif active_check_no == 2:
         pending.check2_res = value
         pending.check2_is_text = True
-    elif pending.check3_res == SENT_TEXT:
+    elif active_check_no == 3:
         pending.check3_res = value
         pending.check3_is_text = True
+    else:
+        return None
     if not is_ok:
         pending.check3_res = ESCALATED_TEXT
         pending.check3_is_text = False
@@ -105,15 +114,17 @@ def get_active_check_for_user(db: Session, user_id: int) -> dict | None:
     )
     if not pending:
         return None
-    if pending.check1_res == SENT_TEXT:
-        check_no = 1
-        deadline = pending.check2_delay_seconds
+    if pending.check3_res == SENT_TEXT:
+        check_no = 3
+        deadline = pending.check3_delay_seconds
     elif pending.check2_res == SENT_TEXT:
         check_no = 2
         deadline = pending.check3_delay_seconds
+    elif pending.check1_res == SENT_TEXT:
+        check_no = 1
+        deadline = pending.check2_delay_seconds
     else:
-        check_no = 3
-        deadline = pending.check3_delay_seconds
+        return None
     return {
         "message_id": pending.id,
         "check_no": check_no,
