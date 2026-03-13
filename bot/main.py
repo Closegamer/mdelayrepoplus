@@ -56,6 +56,14 @@ def flow_keyboard() -> ReplyKeyboardMarkup:
 def message_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Удалить", callback_data=f"msg_delete:{message_id}")]])
 
+def confirm_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[
+            InlineKeyboardButton("Подтвердить", callback_data=f"msg_delete_confirm:{message_id}"),
+            InlineKeyboardButton("Отмена", callback_data=f"msg_delete_cancel:{message_id}"),
+        ]]
+    )
+
 def ensure_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     if STATE_KEY not in context.user_data:
         context.user_data[STATE_KEY] = STATE_IDLE
@@ -208,28 +216,54 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     if not query:
         return
-    await query.answer()
     data = query.data or ""
-    if not data.startswith("msg_delete:"):
+    if data.startswith("msg_delete:"):
+        try:
+            message_id = int(data.split(":", 1)[1])
+        except ValueError:
+            await query.answer("Некорректный идентификатор сообщения.", show_alert=True)
+            return
+        await query.answer()
+        await query.edit_message_reply_markup(reply_markup=confirm_delete_keyboard(message_id))
+        return
+    if data.startswith("msg_delete_cancel:"):
+        try:
+            message_id = int(data.split(":", 1)[1])
+        except ValueError:
+            await query.answer("Некорректный идентификатор сообщения.", show_alert=True)
+            return
+        await query.answer("Удаление отменено.")
+        await query.edit_message_reply_markup(reply_markup=message_delete_keyboard(message_id))
+        return
+    if not data.startswith("msg_delete_confirm:"):
+        await query.answer()
+        return
+    user = query.from_user
+    if not user:
+        await query.answer("Не удалось определить пользователя.", show_alert=True)
         return
     try:
         message_id = int(data.split(":", 1)[1])
     except ValueError:
-        await query.edit_message_text("Некорректный идентификатор сообщения.")
+        await query.answer("Некорректный идентификатор сообщения.", show_alert=True)
         return
-    user = query.from_user
     try:
         response = api_delete(f"/api/messages/{message_id}", params={"user_id": user.id})
         if response.status_code == 204:
-            await query.edit_message_text("Сообщение удалено.")
+            await query.answer("Сообщение удалено.")
+            try:
+                await query.message.delete()
+            except Exception:
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.edit_message_text("Сообщение удалено.")
             return
         if response.status_code == 404:
-            await query.edit_message_text("Сообщение не найдено или уже удалено.")
+            await query.answer("Сообщение не найдено или уже удалено.", show_alert=True)
             return
-        await query.edit_message_text("Не удалось удалить сообщение.")
+        await query.answer("Не удалось удалить сообщение.", show_alert=True)
     except Exception:
         logger.exception("Failed to delete message")
-        await query.edit_message_text("Ошибка удаления сообщения.")
+        await query.answer("Не удалось удалить сообщение.", show_alert=True)
 
 async def setup_bot_commands(application: Application) -> None:
     try:
