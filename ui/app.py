@@ -70,6 +70,35 @@ def render_overview() -> None:
     c6.metric("Check2 SENT", overview["check2_sent"])
     c7.metric("Check3 SENT", overview["check3_sent"])
 
+def row_tracking_status(item: dict) -> str:
+    is_finished = item.get("check3_res") == "ESCALATED" or any(
+        item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")
+    )
+    return "Завершено" if is_finished else "Выполняется"
+
+def row_result_status(item: dict) -> str:
+    if any(item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")):
+        return "Порядок"
+    if item.get("check3_res") == "ESCALATED":
+        return "Тревога"
+    return "-"
+
+def map_table_rows(rows: list[dict]) -> list[dict]:
+    mapped = []
+    for item in rows:
+        mapped.append(
+            {
+                "ID": item.get("id"),
+                "UserID": item.get("user_id"),
+                "Username": item.get("username") or "-",
+                "Сообщение": item.get("message") or "",
+                "Создано": item.get("timecreated") or "",
+                "Слежение": row_tracking_status(item),
+                "Результат": row_result_status(item),
+            }
+        )
+    return mapped
+
 def ensure_page_offset_state(key: str) -> None:
     if key not in st.session_state:
         st.session_state[key] = 0
@@ -85,7 +114,7 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
             st.session_state[page_key] = max(0, offset - page_size)
             st.rerun()
         return
-    st.table(rows)
+    st.table(map_table_rows(rows))
     page_number = (offset // page_size) + 1
     nav_left, nav_center, nav_right = st.columns([3, 2, 3], vertical_alignment="center")
     with nav_left:
