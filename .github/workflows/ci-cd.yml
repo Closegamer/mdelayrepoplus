@@ -36,6 +36,19 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ALERT_CHAT_ID: ${{ secrets.ALERT_CHAT_ID }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          SCHEDULER_POLL_SECONDS: ${{ secrets.SCHEDULER_POLL_SECONDS }}
+          CHECK1_SECONDS: ${{ secrets.CHECK1_SECONDS }}
+          CHECK2_SECONDS: ${{ secrets.CHECK2_SECONDS }}
+          CHECK3_SECONDS: ${{ secrets.CHECK3_SECONDS }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -57,20 +70,26 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            cat > .env <<'EOF'
-            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            POSTGRES_HOST=${{ secrets.POSTGRES_HOST }}
-            POSTGRES_PORT=${{ secrets.POSTGRES_PORT }}
-            BOT_TOKEN=${{ secrets.BOT_TOKEN }}
-            ALERT_CHAT_ID=${{ secrets.ALERT_CHAT_ID }}
-            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
-            SCHEDULER_POLL_SECONDS=${{ secrets.SCHEDULER_POLL_SECONDS }}
-            CHECK1_SECONDS=${{ secrets.CHECK1_SECONDS }}
-            CHECK2_SECONDS=${{ secrets.CHECK2_SECONDS }}
-            CHECK3_SECONDS=${{ secrets.CHECK3_SECONDS }}
-            EOF
+            write_env() {
+              key="$1"
+              val="$2"
+              clean="$(printf '%s' "$val" | tr '\r\n' ' ' | sed 's/[[:space:]]\+$//')"
+              printf '%s=%s\n' "$key" "$clean" >> .env
+            }
+
+            : > .env
+            write_env POSTGRES_DB "$POSTGRES_DB"
+            write_env POSTGRES_USER "$POSTGRES_USER"
+            write_env POSTGRES_PASSWORD "$POSTGRES_PASSWORD"
+            write_env POSTGRES_HOST "$POSTGRES_HOST"
+            write_env POSTGRES_PORT "$POSTGRES_PORT"
+            write_env BOT_TOKEN "$BOT_TOKEN"
+            write_env ALERT_CHAT_ID "$ALERT_CHAT_ID"
+            write_env ADMIN_PASSWORD "$ADMIN_PASSWORD"
+            write_env SCHEDULER_POLL_SECONDS "$SCHEDULER_POLL_SECONDS"
+            write_env CHECK1_SECONDS "$CHECK1_SECONDS"
+            write_env CHECK2_SECONDS "$CHECK2_SECONDS"
+            write_env CHECK3_SECONDS "$CHECK3_SECONDS"
 
             if docker compose version >/dev/null 2>&1; then
               docker compose up -d --build --remove-orphans
