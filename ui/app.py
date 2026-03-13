@@ -6,6 +6,17 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 TIMEOUT_SECONDS = 15
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
+def inject_global_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"] {display: none;}
+        [data-testid="collapsedControl"] {display: none;}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 def api_get(path: str, params: dict | None = None):
     response = requests.get(f"{API_BASE_URL}{path}", params=params, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
@@ -122,6 +133,7 @@ def render_footer() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="mDelayPlusBot Admin", layout="wide")
+    inject_global_styles()
     ensure_auth_state()
     if not st.session_state.logged_in:
         render_login()
