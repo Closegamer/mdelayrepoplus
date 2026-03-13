@@ -34,6 +34,7 @@ def startup() -> None:
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check1_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check2_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check3_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS user_response_text TEXT"))
 
 @app.get("/health", response_model=HealthOut)
 def health() -> HealthOut:
@@ -58,6 +59,7 @@ def _to_out(item: Message) -> MessageOut:
         check3_time=item.check3_time,
         check3_res=item.check3_res,
         check3_is_text=item.check3_is_text,
+        user_response_text=item.user_response_text,
         check1_delay_seconds=item.check1_delay_seconds,
         check2_delay_seconds=item.check2_delay_seconds,
         check3_delay_seconds=item.check3_delay_seconds,

@@ -34,6 +34,7 @@ class MessageOut(BaseModel):
     check3_time: datetime | None
     check3_res: str | None
     check3_is_text: bool
+    user_response_text: str | None
     check1_delay_seconds: int
     check2_delay_seconds: int
     check3_delay_seconds: int

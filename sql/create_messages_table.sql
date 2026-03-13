@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS messages (
     check3_time TIMESTAMPTZ,
     check3_res TEXT,
     check3_is_text BOOLEAN NOT NULL DEFAULT FALSE,
+    user_response_text TEXT,
     check1_delay_seconds INTEGER NOT NULL DEFAULT 3600,
     check2_delay_seconds INTEGER NOT NULL DEFAULT 3600,
     check3_delay_seconds INTEGER NOT NULL DEFAULT 3600

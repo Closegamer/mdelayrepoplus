@@ -24,6 +24,7 @@ class Message(Base):
     check3_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check3_res: Mapped[str | None] = mapped_column(Text, nullable=True)
     check3_is_text: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    user_response_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     check1_delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600, server_default="3600")
     check2_delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600, server_default="3600")
     check3_delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=3600, server_default="3600")

@@ -75,6 +75,7 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
     answer = response_text.strip()
     is_ok = _normalize_ok_text(answer) == _normalize_ok_text(OK_TEXT)
     value = OK_TEXT if is_ok else answer
+    pending.user_response_text = answer
     if pending.check1_res == SENT_TEXT:
         pending.check1_res = value
         pending.check1_is_text = True
