@@ -188,6 +188,11 @@ def filter_table_rows(rows: list[dict], query: str) -> list[dict]:
             filtered.append(row)
     return filtered
 
+def sort_raw_rows(rows: list[dict], sort_by: str, descending: bool) -> list[dict]:
+    if sort_by == "ID":
+        return sorted(rows, key=lambda item: int(item.get("id") or 0), reverse=descending)
+    return sorted(rows, key=lambda item: str(item.get("timecreated") or ""), reverse=descending)
+
 def clear_filter_value(key: str) -> None:
     st.session_state[key] = ""
 
@@ -206,6 +211,12 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
             st.session_state[page_key] = max(0, offset - page_size)
             st.rerun()
         return
+    sort_col, order_col, _, _, _ = st.columns([2, 2, 1, 1, 1], vertical_alignment="bottom")
+    with sort_col:
+        sort_by = st.selectbox("Сортировка", ["ID", "Создано"], key=f"{page_key}_sort_by")
+    with order_col:
+        sort_order = st.selectbox("Порядок", ["Сначала новые", "Сначала старые"], key=f"{page_key}_sort_order")
+    rows = sort_raw_rows(rows, sort_by=sort_by, descending=(sort_order == "Сначала новые"))
     filter_col, clear_col = st.columns([6, 1], vertical_alignment="bottom")
     filter_key = f"{page_key}_filter"
     with filter_col:
