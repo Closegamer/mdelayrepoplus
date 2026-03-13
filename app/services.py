@@ -192,7 +192,6 @@ def worker_step(
 
 def _active_condition():
     return and_(
-        Message.check1_time.is_not(None),
         or_(Message.check3_res.is_(None), Message.check3_res != ESCALATED_TEXT),
         or_(Message.check1_res.is_(None), Message.check1_res != OK_TEXT),
         or_(Message.check2_res.is_(None), Message.check2_res != OK_TEXT),
