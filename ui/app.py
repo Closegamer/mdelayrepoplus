@@ -12,6 +12,21 @@ def inject_global_styles() -> None:
         <style>
         [data-testid="stSidebar"] {display: none;}
         [data-testid="collapsedControl"] {display: none;}
+        [data-testid="stMetric"] {
+            background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
+            border: 1px solid #2a313b;
+            border-radius: 12px;
+            padding: 10px 14px;
+        }
+        [data-testid="stMetricLabel"] p {
+            font-size: 14px;
+            color: #b7c0cd;
+        }
+        [data-testid="stMetricValue"] div {
+            font-size: 30px;
+            font-weight: 700;
+            color: #e8eef7;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -60,15 +75,17 @@ def render_login() -> bool:
 
 def render_overview() -> None:
     overview = api_get("/api/admin/overview")
+    st.markdown("#### Сводка")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Всего сообщений", overview["total_messages"])
     c2.metric("Пользователей", overview["total_users"])
     c3.metric("Тревог", overview["total_alerts"])
     c4.metric("Активные проверки", overview["active_checks"])
+    st.markdown("#### Состояние проверок")
     c5, c6, c7 = st.columns(3)
-    c5.metric("Check1 SENT", overview["check1_sent"])
-    c6.metric("Check2 SENT", overview["check2_sent"])
-    c7.metric("Check3 SENT", overview["check3_sent"])
+    c5.metric("1-я проверка (SENT)", overview["check1_sent"])
+    c6.metric("2-я проверка (SENT)", overview["check2_sent"])
+    c7.metric("3-я проверка (SENT)", overview["check3_sent"])
 
 def row_tracking_status(item: dict) -> str:
     is_finished = item.get("check3_res") == "ESCALATED" or any(
@@ -116,7 +133,7 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
         return
     st.table(map_table_rows(rows))
     page_number = (offset // page_size) + 1
-    nav_left, nav_center, nav_right = st.columns([3, 2, 3], vertical_alignment="center")
+    _, nav_left, nav_center, nav_right, _ = st.columns([2, 2, 2, 2, 2], vertical_alignment="center")
     with nav_left:
         back_clicked = st.button("Назад", key=f"{page_key}_back", use_container_width=True, disabled=offset == 0)
     with nav_center:
