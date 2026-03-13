@@ -128,10 +128,13 @@ def row_result_status(item: dict) -> str:
         return "Тревога"
     return "-"
 
-def format_check_response(value: str | None) -> str:
+def format_check_response(item: dict, check_no: int) -> str:
+    value = item.get(f"check{check_no}_res")
     if not value or value == "SENT":
         return "-"
     if value == "ESCALATED":
+        if check_no == 3 and not item.get("check3_time"):
+            return "-"
         return "Тревога"
     return value
 
@@ -164,9 +167,9 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
                 "Сообщение": shorten_message(item.get("message") or ""),
                 "Создано": format_created_at(item.get("timecreated")),
                 "Первый запрос": format_first_request_time(item),
-                "Ответ Check1": format_check_response(item.get("check1_res")),
-                "Ответ Check2": format_check_response(item.get("check2_res")),
-                "Ответ Check3": format_check_response(item.get("check3_res")),
+                "Ответ Check1": format_check_response(item, 1),
+                "Ответ Check2": format_check_response(item, 2),
+                "Ответ Check3": format_check_response(item, 3),
                 "Слежение": tracking,
                 "Результат": result,
             }
