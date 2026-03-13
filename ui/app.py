@@ -83,7 +83,6 @@ def render_login() -> bool:
 
 def render_overview() -> None:
     overview = api_get("/api/admin/overview")
-    st.markdown("#### Сводка")
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         render_kpi_card("Всего сообщений", overview["total_messages"], "default")
@@ -93,14 +92,13 @@ def render_overview() -> None:
         render_kpi_card("Тревог", overview["total_alerts"], "danger")
     with c4:
         render_kpi_card("Активные проверки", overview["active_checks"], "warn")
-    st.markdown("#### Состояние проверок")
     c5, c6, c7 = st.columns(3)
     with c5:
-        render_kpi_card("1-я проверка (SENT)", overview["check1_sent"], "default")
+        render_kpi_card("Check1 SENT", overview["check1_sent"], "default")
     with c6:
-        render_kpi_card("2-я проверка (SENT)", overview["check2_sent"], "default")
+        render_kpi_card("Check2 SENT", overview["check2_sent"], "default")
     with c7:
-        render_kpi_card("3-я проверка (SENT)", overview["check3_sent"], "default")
+        render_kpi_card("Check3 SENT", overview["check3_sent"], "default")
 
 def render_kpi_card(label: str, value: int, tone: str) -> None:
     st.markdown(
@@ -126,33 +124,6 @@ def row_result_status(item: dict) -> str:
         return "Тревога"
     return "-"
 
-def format_tracking_badge(value: str) -> str:
-    if value == "Выполняется":
-        return "🟠 Выполняется"
-    return "✅ Завершено"
-
-def format_result_badge(value: str) -> str:
-    if value == "Порядок":
-        return "🟢 Порядок"
-    if value == "Тревога":
-        return "🔴 Тревога"
-    return "⚪ -"
-
-def shorten_message(value: str, limit: int = 90) -> str:
-    if len(value) <= limit:
-        return value
-    return value[: limit - 1].rstrip() + "…"
-
-def format_created_at(value: str | None) -> str:
-    if not value:
-        return "-"
-    raw = value.replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(raw)
-        return dt.strftime("%d.%m.%Y %H:%M")
-    except ValueError:
-        return value
-
 def map_table_rows(rows: list[dict]) -> list[dict]:
     mapped = []
     for item in rows:
@@ -165,36 +136,26 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
                 "Username": item.get("username") or "-",
                 "Сообщение": shorten_message(item.get("message") or ""),
                 "Создано": format_created_at(item.get("timecreated")),
-                "Слежение": format_tracking_badge(tracking),
-                "Результат": format_result_badge(result),
+                "Слежение": tracking,
+                "Результат": result,
             }
         )
     return mapped
 
-def filter_table_rows(rows: list[dict], query: str) -> list[dict]:
-    needle = query.strip().lower()
-    if not needle:
-        return rows
-    filtered = []
-    for row in rows:
-        haystack = " ".join(
-            [
-                str(row.get("UserID", "")),
-                str(row.get("Username", "")),
-                str(row.get("Сообщение", "")),
-            ]
-        ).lower()
-        if needle in haystack:
-            filtered.append(row)
-    return filtered
+def shorten_message(value: str, limit: int = 90) -> str:
+    if len(value) <= limit:
+        return value
+    return value[: limit - 1].rstrip() + "..."
 
-def sort_raw_rows(rows: list[dict], sort_by: str, descending: bool) -> list[dict]:
-    if sort_by == "ID":
-        return sorted(rows, key=lambda item: int(item.get("id") or 0), reverse=descending)
-    return sorted(rows, key=lambda item: str(item.get("timecreated") or ""), reverse=descending)
-
-def clear_filter_value(key: str) -> None:
-    st.session_state[key] = ""
+def format_created_at(value: str | None) -> str:
+    if not value:
+        return "-"
+    raw = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+        return dt.strftime("%d.%m.%Y %H:%M")
+    except ValueError:
+        return value
 
 def ensure_page_offset_state(key: str) -> None:
     if key not in st.session_state:
@@ -211,34 +172,7 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
             st.session_state[page_key] = max(0, offset - page_size)
             st.rerun()
         return
-    sort_col, order_col, _, _, _ = st.columns([2, 2, 1, 1, 1], vertical_alignment="bottom")
-    with sort_col:
-        sort_by = st.selectbox("Сортировка", ["ID", "Создано"], key=f"{page_key}_sort_by")
-    with order_col:
-        sort_order = st.selectbox("Порядок", ["Сначала новые", "Сначала старые"], key=f"{page_key}_sort_order")
-    rows = sort_raw_rows(rows, sort_by=sort_by, descending=(sort_order == "Сначала новые"))
-    filter_col, clear_col = st.columns([6, 1], vertical_alignment="bottom")
-    filter_key = f"{page_key}_filter"
-    with filter_col:
-        search_query = st.text_input(
-            "Фильтр (UserID / Username / текст)",
-            key=filter_key,
-            placeholder="Например: 227287028 или closegamer",
-        )
-    with clear_col:
-        st.button(
-            "Сбросить",
-            key=f"{page_key}_filter_clear",
-            use_container_width=True,
-            on_click=clear_filter_value,
-            args=(filter_key,),
-        )
-    mapped_rows = map_table_rows(rows)
-    filtered_rows = filter_table_rows(mapped_rows, search_query)
-    if not filtered_rows:
-        st.info("По фильтру ничего не найдено.")
-    else:
-        st.table(filtered_rows)
+    st.table(map_table_rows(rows))
     page_number = (offset // page_size) + 1
     _, nav_left, nav_center, nav_right, _ = st.columns([2, 2, 2, 2, 2], vertical_alignment="center")
     with nav_left:
