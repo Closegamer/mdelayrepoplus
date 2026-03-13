@@ -50,6 +50,9 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
     )
 
+def flow_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup([["Назад в главное меню"]], resize_keyboard=True)
+
 def message_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Удалить", callback_data=f"msg_delete:{message_id}")]])
 
@@ -69,6 +72,18 @@ def message_result_status(item: dict) -> str:
     if item.get("check3_res") == "ESCALATED":
         return "Тревога"
     return "-"
+
+def format_api_datetime(value: str | None) -> str:
+    if not value:
+        return "-"
+    raw = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return value
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone().strftime("%d.%m.%Y %H:%M:%S")
 
 async def try_submit_check_response(update: Update, text: str) -> bool:
     user = update.effective_user
@@ -114,7 +129,7 @@ async def show_user_messages(update: Update) -> None:
             result = message_result_status(item)
             text = (
                 f"{idx}. Текст: {item.get('message', '')}\n"
-                f"Время отправки: {item.get('timecreated', '-')}\n"
+                f"Время отправки: {format_api_datetime(item.get('timecreated'))}\n"
                 f"Слежение: {tracking}\n"
                 f"Результат: {result}"
             )
@@ -127,9 +142,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     ensure_state(context)
     text = (update.message.text or "").strip()
     state = context.user_data.get(STATE_KEY, STATE_IDLE)
+    if text == "Назад в главное меню":
+        context.user_data[STATE_KEY] = STATE_IDLE
+        await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard())
+        return
     if text == "Написать новое сообщение":
         context.user_data[STATE_KEY] = STATE_WAIT_MESSAGE
-        await update.message.reply_text("Введите текст одним сообщением.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("Введите текст одним сообщением.", reply_markup=flow_keyboard())
         return
     if text == "Прочитать свои сообщения":
         context.user_data[STATE_KEY] = STATE_IDLE
@@ -174,7 +193,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 "Сообщение сохранено.\n\n"
                 f"Текст: {text}\n"
                 f"Отправитель: {sender_name} (username: {sender_username}, id: {user.id})\n"
-                f"Время отправки: {sent_at}",
+                f"Время отправки: {sent_at.astimezone().strftime('%d.%m.%Y %H:%M:%S')}",
                 reply_markup=main_menu_keyboard(),
             )
             return
