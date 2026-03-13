@@ -61,9 +61,10 @@ def flow_keyboard() -> ReplyKeyboardMarkup:
 def first_period_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
-            ["Первый опрос через 3 часа", "Первый опрос через 6 часов"],
-            ["Первый опрос через 10 часов", "Первый опрос через 24 часа"],
-            ["Первый опрос через 3 дня", "Первый опрос через 7 дней"],
+            ["Первый опрос через 1 час", "Первый опрос через 3 часа"],
+            ["Первый опрос через 6 часов", "Первый опрос через 10 часов"],
+            ["Первый опрос через 24 часа", "Первый опрос через 3 дня"],
+            ["Первый опрос через 7 дней"],
             ["Тест: все опросы через 1 минуту"],
             ["Назад в главное меню"],
         ],
@@ -71,6 +72,8 @@ def first_period_keyboard() -> ReplyKeyboardMarkup:
     )
 
 def parse_first_period_choice(text: str) -> tuple[int, int, int, str] | None:
+    if text == "Первый опрос через 1 час":
+        return 1 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
     if text == "Первый опрос через 3 часа":
         return 3 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
     if text == "Первый опрос через 6 часов":
