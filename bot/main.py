@@ -6,6 +6,7 @@ from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Rep
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
+ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
 STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
@@ -93,7 +94,30 @@ def format_api_datetime(value: str | None) -> str:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone().strftime("%d.%m.%Y %H:%M:%S")
 
-async def try_submit_check_response(update: Update, text: str) -> bool:
+async def send_emergency_now(
+    context: ContextTypes.DEFAULT_TYPE,
+    user,
+    recorded: dict,
+    response_text: str,
+) -> None:
+    if not ALERT_CHAT_ID:
+        raise RuntimeError("ALERT_CHAT_ID is not set")
+    username_text = f"@{user.username}" if user and user.username else "-"
+    full_name = " ".join(x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x) or "Пользователь"
+    created_text = format_api_datetime(recorded.get("timecreated"))
+    alert_text = (
+        "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
+        f"ID сообщения: {recorded.get('id')}\n"
+        f"User id: {user.id if user else '-'}\n"
+        f"Username: {username_text}\n"
+        f"Имя: {full_name}\n\n"
+        f"Время создания сообщения: {created_text}\n\n"
+        f"Текст сообщения:\n{recorded.get('message', '')}\n\n"
+        f"Ответ пользователя:\n{response_text}"
+    )
+    await context.bot.send_message(chat_id=ALERT_CHAT_ID, text=alert_text)
+
+async def try_submit_check_response(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
     user = update.effective_user
     if not user:
         return False
@@ -102,10 +126,36 @@ async def try_submit_check_response(update: Update, text: str) -> bool:
         return False
     if not active_response.ok:
         raise RuntimeError(f"active-check status {active_response.status_code}")
-    submit_response = api_post("/api/messages/response", {"user_id": user.id, "response_text": text})
-    if not submit_response.ok:
-        raise RuntimeError(f"response submit status {submit_response.status_code}")
-    await update.message.reply_text("Ответ на проверку сохранен.", reply_markup=main_menu_keyboard())
+    submit_response_call = api_post("/api/messages/response", {"user_id": user.id, "response_text": text})
+    if not submit_response_call.ok:
+        raise RuntimeError(f"response submit status {submit_response_call.status_code}")
+    recorded = submit_response_call.json()
+    created_text = format_api_datetime(recorded.get("timecreated"))
+    if recorded.get("check3_res") == "ESCALATED":
+        try:
+            await send_emergency_now(context, user, recorded, text)
+            await update.message.reply_text(
+                "Ответ на проверку сохранен.\n"
+                "Ответ отличается от \"Я в порядке\", аварийное сообщение отправлено в службу спасения.\n\n"
+                f"id сообщения: {recorded.get('id')}\n"
+                f"Время создания: {created_text}\n"
+                f"Ваш ответ: {text}",
+                reply_markup=main_menu_keyboard(),
+            )
+        except Exception:
+            logger.exception("Failed to send immediate emergency alert")
+            await update.message.reply_text(
+                "Ответ на проверку сохранен, но аварийное сообщение пока не отправилось.",
+                reply_markup=main_menu_keyboard(),
+            )
+        return True
+    await update.message.reply_text(
+        "Принято. Вы в порядке.\n"
+        "Бот прекращает следить за этим сообщением.\n\n"
+        f"id сообщения: {recorded.get('id')}\n"
+        f"Время создания: {created_text}\n",
+        reply_markup=main_menu_keyboard(),
+    )
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -150,6 +200,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     ensure_state(context)
     text = (update.message.text or "").strip()
     state = context.user_data.get(STATE_KEY, STATE_IDLE)
+    is_ok_phrase = text in ("Я в порядке", "Я в порядке.")
     if text == "Назад в главное меню":
         context.user_data[STATE_KEY] = STATE_IDLE
         await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard())
@@ -163,8 +214,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await show_user_messages(update)
         return
     if state == STATE_IDLE:
+        if is_ok_phrase:
+            try:
+                accepted = await try_submit_check_response(update, context, text)
+                if accepted:
+                    return
+                await update.message.reply_text("Нет активной проверки для подтверждения.", reply_markup=main_menu_keyboard())
+                return
+            except Exception:
+                logger.exception("Failed to submit check response")
+                await update.message.reply_text("Не удалось обработать ответ.", reply_markup=main_menu_keyboard())
+                return
         try:
-            accepted = await try_submit_check_response(update, text)
+            accepted = await try_submit_check_response(update, context, text)
             if accepted:
                 return
         except Exception:
