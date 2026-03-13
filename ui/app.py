@@ -12,18 +12,25 @@ def inject_global_styles() -> None:
         <style>
         [data-testid="stSidebar"] {display: none;}
         [data-testid="collapsedControl"] {display: none;}
-        [data-testid="stMetric"] {
-            background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
-            border: 1px solid #2a313b;
+        .kpi-card {
             border-radius: 12px;
-            padding: 10px 14px;
+            padding: 12px 14px;
+            border: 1px solid #2a313b;
+            background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
+            margin-bottom: 8px;
         }
-        [data-testid="stMetricLabel"] p {
-            font-size: 14px;
+        .kpi-card.default {border-left: 4px solid #3b82f6;}
+        .kpi-card.success {border-left: 4px solid #10b981;}
+        .kpi-card.warn {border-left: 4px solid #f59e0b;}
+        .kpi-card.danger {border-left: 4px solid #ef4444;}
+        .kpi-label {
+            font-size: 13px;
             color: #b7c0cd;
+            margin-bottom: 6px;
         }
-        [data-testid="stMetricValue"] div {
+        .kpi-value {
             font-size: 30px;
+            line-height: 1;
             font-weight: 700;
             color: #e8eef7;
         }
@@ -77,15 +84,33 @@ def render_overview() -> None:
     overview = api_get("/api/admin/overview")
     st.markdown("#### Сводка")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Всего сообщений", overview["total_messages"])
-    c2.metric("Пользователей", overview["total_users"])
-    c3.metric("Тревог", overview["total_alerts"])
-    c4.metric("Активные проверки", overview["active_checks"])
+    with c1:
+        render_kpi_card("Всего сообщений", overview["total_messages"], "default")
+    with c2:
+        render_kpi_card("Пользователей", overview["total_users"], "success")
+    with c3:
+        render_kpi_card("Тревог", overview["total_alerts"], "danger")
+    with c4:
+        render_kpi_card("Активные проверки", overview["active_checks"], "warn")
     st.markdown("#### Состояние проверок")
     c5, c6, c7 = st.columns(3)
-    c5.metric("1-я проверка (SENT)", overview["check1_sent"])
-    c6.metric("2-я проверка (SENT)", overview["check2_sent"])
-    c7.metric("3-я проверка (SENT)", overview["check3_sent"])
+    with c5:
+        render_kpi_card("1-я проверка (SENT)", overview["check1_sent"], "default")
+    with c6:
+        render_kpi_card("2-я проверка (SENT)", overview["check2_sent"], "default")
+    with c7:
+        render_kpi_card("3-я проверка (SENT)", overview["check3_sent"], "default")
+
+def render_kpi_card(label: str, value: int, tone: str) -> None:
+    st.markdown(
+        (
+            f"<div class='kpi-card {tone}'>"
+            f"<div class='kpi-label'>{label}</div>"
+            f"<div class='kpi-value'>{value}</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
 
 def row_tracking_status(item: dict) -> str:
     is_finished = item.get("check3_res") == "ESCALATED" or any(
