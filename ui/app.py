@@ -188,6 +188,9 @@ def filter_table_rows(rows: list[dict], query: str) -> list[dict]:
             filtered.append(row)
     return filtered
 
+def clear_filter_value(key: str) -> None:
+    st.session_state[key] = ""
+
 def ensure_page_offset_state(key: str) -> None:
     if key not in st.session_state:
         st.session_state[key] = 0
@@ -203,12 +206,22 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
             st.session_state[page_key] = max(0, offset - page_size)
             st.rerun()
         return
-    search_query = st.text_input(
-        "Фильтр (UserID / Username / текст)",
-        value="",
-        key=f"{page_key}_filter",
-        placeholder="Например: 227287028 или closegamer",
-    )
+    filter_col, clear_col = st.columns([6, 1], vertical_alignment="bottom")
+    filter_key = f"{page_key}_filter"
+    with filter_col:
+        search_query = st.text_input(
+            "Фильтр (UserID / Username / текст)",
+            key=filter_key,
+            placeholder="Например: 227287028 или closegamer",
+        )
+    with clear_col:
+        st.button(
+            "Сбросить",
+            key=f"{page_key}_filter_clear",
+            use_container_width=True,
+            on_click=clear_filter_value,
+            args=(filter_key,),
+        )
     mapped_rows = map_table_rows(rows)
     filtered_rows = filter_table_rows(mapped_rows, search_query)
     if not filtered_rows:
