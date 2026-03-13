@@ -92,22 +92,36 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
         st.session_state[page_key] = offset + page_size
         st.rerun()
 
+def render_header() -> None:
+    left, right = st.columns([9, 1], vertical_alignment="top")
+    with left:
+        st.title("mDelayPlusBot - Центр мониторинга и управления")
+    with right:
+        if st.button("Выйти", use_container_width=True):
+            st.session_state.logged_in = False
+            st.rerun()
+
+def render_filters() -> int:
+    f1, f2, _ = st.columns([2, 1, 7], vertical_alignment="bottom")
+    with f1:
+        page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
+    with f2:
+        apply_clicked = st.button("Применить", use_container_width=True)
+    if apply_clicked:
+        st.session_state["messages_offset"] = 0
+        st.session_state["alerts_offset"] = 0
+        st.session_state["active_offset"] = 0
+        st.rerun()
+    return page_size
+
 def main() -> None:
     st.set_page_config(page_title="mDelayPlusBot Admin", layout="wide")
     ensure_auth_state()
     if not st.session_state.logged_in:
         render_login()
         return
-    st.title("mDelayPlusBot - Центр мониторинга и управления")
-    if st.button("Выйти"):
-        st.session_state.logged_in = False
-        st.rerun()
-    page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
-    if st.button("Применить"):
-        st.session_state["messages_offset"] = 0
-        st.session_state["alerts_offset"] = 0
-        st.session_state["active_offset"] = 0
-        st.rerun()
+    render_header()
+    page_size = render_filters()
     try:
         render_overview()
         tab_messages, tab_alerts, tab_active = st.tabs(["Сообщения", "Тревоги", "Активные проверки"])
