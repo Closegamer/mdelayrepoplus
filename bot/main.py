@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime, timezone
 import requests
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
@@ -14,6 +15,8 @@ STATE_WAIT_FIRST_PERIOD = "wait_first_period"
 DRAFT_MESSAGE_KEY = "draft_message_text"
 DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
+OK_CANONICAL_TEXT = "Я в порядке"
+OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -124,6 +127,15 @@ def format_api_datetime(value: str | None) -> str:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone().strftime("%d.%m.%Y %H:%M:%S")
 
+def normalize_ok_input(value: str) -> str:
+    normalized = value.strip().lower().replace("ё", "е")
+    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = normalized.strip(" .,!?:;\"'`~+-=_()[]{}<>")
+    return normalized
+
+def is_ok_text(value: str) -> bool:
+    return normalize_ok_input(value) in OK_NORMALIZED_VARIANTS
+
 def is_test_period_message(recorded: dict) -> bool:
     if recorded.get("message_mode") == "Тестовый":
         return True
@@ -193,8 +205,8 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
     await update.message.reply_text(
         "Принято. Вы в порядке.\n"
         "Бот прекращает следить за этим сообщением.\n\n"
-        f"id сообщения: {recorded.get('id')}\n"
-        f"Время создания: {created_text}\n",
+        f"Время создания: {created_text}\n"
+        f"Исходное сообщение: {recorded.get('message', '')}\n",
         reply_markup=main_menu_keyboard(),
     )
     return True
@@ -241,7 +253,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     ensure_state(context)
     text = (update.message.text or "").strip()
     state = context.user_data.get(STATE_KEY, STATE_IDLE)
-    is_ok_phrase = text in ("Я в порядке", "Я в порядке.")
+    is_ok_phrase = is_ok_text(text)
     if text == "Назад в главное меню":
         context.user_data[STATE_KEY] = STATE_IDLE
         context.user_data.pop(DRAFT_MESSAGE_KEY, None)
@@ -259,7 +271,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if state == STATE_IDLE:
         if is_ok_phrase:
             try:
-                accepted = await try_submit_check_response(update, context, text)
+                accepted = await try_submit_check_response(update, context, OK_CANONICAL_TEXT)
                 if accepted:
                     return
                 await update.message.reply_text("Нет активной проверки для подтверждения.", reply_markup=main_menu_keyboard())
