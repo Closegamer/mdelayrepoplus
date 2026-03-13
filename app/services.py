@@ -25,6 +25,10 @@ def create_message(
     first_name: str | None,
     last_name: str | None,
     message_text: str,
+    message_mode: str | None = None,
+    check1_delay_seconds: int | None = None,
+    check2_delay_seconds: int | None = None,
+    check3_delay_seconds: int | None = None,
 ) -> Message:
     obj = Message(
         userid=user_id,
@@ -32,6 +36,10 @@ def create_message(
         firstname=first_name,
         lastname=last_name,
         message=message_text,
+        message_mode=message_mode or "Реальный",
+        check1_delay_seconds=check1_delay_seconds or settings.check1_seconds,
+        check2_delay_seconds=check2_delay_seconds or settings.check2_seconds,
+        check3_delay_seconds=check3_delay_seconds or settings.check3_seconds,
     )
     db.add(obj)
     db.commit()
@@ -43,6 +51,11 @@ def list_user_messages(db: Session, user_id: int) -> list[Message]:
 
 def delete_user_message(db: Session, user_id: int, message_id: int) -> bool:
     deleted = db.query(Message).filter(Message.id == message_id, Message.userid == user_id).delete()
+    db.commit()
+    return deleted > 0
+
+def delete_message_by_id(db: Session, message_id: int) -> bool:
+    deleted = db.query(Message).filter(Message.id == message_id).delete()
     db.commit()
     return deleted > 0
 
@@ -93,13 +106,13 @@ def get_active_check_for_user(db: Session, user_id: int) -> dict | None:
         return None
     if pending.check1_res == SENT_TEXT:
         check_no = 1
-        deadline = settings.check2_seconds
+        deadline = pending.check2_delay_seconds
     elif pending.check2_res == SENT_TEXT:
         check_no = 2
-        deadline = settings.check3_seconds
+        deadline = pending.check3_delay_seconds
     else:
         check_no = 3
-        deadline = settings.check3_seconds
+        deadline = pending.check3_delay_seconds
     return {
         "message_id": pending.id,
         "check_no": check_no,
@@ -134,7 +147,7 @@ def worker_step(
         check2_at = _dt_aware(row.check2_time)
         check3_at = _dt_aware(row.check3_time)
         if row.check1_time is None and row.check1_res is None and created_at is not None:
-            if (now - created_at).total_seconds() >= settings.check1_seconds:
+            if (now - created_at).total_seconds() >= row.check1_delay_seconds:
                 if on_send_check and not on_send_check(row, 1):
                     continue
                 row.check1_time = now
@@ -142,7 +155,7 @@ def worker_step(
                 row.check1_is_text = False
                 continue
         if row.check1_res == SENT_TEXT and row.check2_time is None and check1_at is not None:
-            if (now - check1_at).total_seconds() >= settings.check2_seconds:
+            if (now - check1_at).total_seconds() >= row.check2_delay_seconds:
                 if on_send_check and not on_send_check(row, 2):
                     continue
                 row.check2_time = now
@@ -150,7 +163,7 @@ def worker_step(
                 row.check2_is_text = False
                 continue
         if row.check2_res == SENT_TEXT and row.check3_time is None and check2_at is not None:
-            if (now - check2_at).total_seconds() >= settings.check3_seconds:
+            if (now - check2_at).total_seconds() >= row.check3_delay_seconds:
                 if on_send_check and not on_send_check(row, 3):
                     continue
                 row.check3_time = now
@@ -158,7 +171,7 @@ def worker_step(
                 row.check3_is_text = False
                 continue
         if row.check3_res == SENT_TEXT and check3_at is not None:
-            if (now - check3_at).total_seconds() >= settings.check3_seconds:
+            if (now - check3_at).total_seconds() >= row.check3_delay_seconds:
                 if on_send_escalation and not on_send_escalation(row):
                     continue
                 row.check3_res = ESCALATED_TEXT

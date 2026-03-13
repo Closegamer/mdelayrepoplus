@@ -10,6 +10,10 @@ ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
 STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
+STATE_WAIT_FIRST_PERIOD = "wait_first_period"
+DRAFT_MESSAGE_KEY = "draft_message_text"
+DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
+DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -51,6 +55,35 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
 def flow_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([["Назад в главное меню"]], resize_keyboard=True)
 
+def first_period_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            ["Первый опрос через 3 часа", "Первый опрос через 6 часов"],
+            ["Первый опрос через 10 часов", "Первый опрос через 24 часа"],
+            ["Первый опрос через 3 дня", "Первый опрос через 7 дней"],
+            ["Тест: все опросы через 1 минуту"],
+            ["Назад в главное меню"],
+        ],
+        resize_keyboard=True,
+    )
+
+def parse_first_period_choice(text: str) -> tuple[int, int, int, str] | None:
+    if text == "Первый опрос через 3 часа":
+        return 3 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
+    if text == "Первый опрос через 6 часов":
+        return 6 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
+    if text == "Первый опрос через 10 часов":
+        return 10 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
+    if text == "Первый опрос через 24 часа":
+        return 24 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
+    if text == "Первый опрос через 3 дня":
+        return 3 * 24 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
+    if text == "Первый опрос через 7 дней":
+        return 7 * 24 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
+    if text == "Тест: все опросы через 1 минуту":
+        return 60, 60, 60, "Тестовый"
+    return None
+
 def message_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Удалить", callback_data=f"msg_delete:{message_id}")]])
 
@@ -91,6 +124,15 @@ def format_api_datetime(value: str | None) -> str:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone().strftime("%d.%m.%Y %H:%M:%S")
 
+def is_test_period_message(recorded: dict) -> bool:
+    if recorded.get("message_mode") == "Тестовый":
+        return True
+    return (
+        int(recorded.get("check1_delay_seconds") or 0) == 60
+        and int(recorded.get("check2_delay_seconds") or 0) == 60
+        and int(recorded.get("check3_delay_seconds") or 0) == 60
+    )
+
 async def send_emergency_now(
     context: ContextTypes.DEFAULT_TYPE,
     user,
@@ -102,8 +144,10 @@ async def send_emergency_now(
     username_text = f"@{user.username}" if user and user.username else "-"
     full_name = " ".join(x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x) or "Пользователь"
     created_text = format_api_datetime(recorded.get("timecreated"))
+    mode_text = "РЕЖИМ: ТЕСТОВЫЙ (все периоды по 1 минуте)\n\n" if is_test_period_message(recorded) else ""
     alert_text = (
         "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
+        f"{mode_text}"
         f"ID сообщения: {recorded.get('id')}\n"
         f"User id: {user.id if user else '-'}\n"
         f"Username: {username_text}\n"
@@ -200,10 +244,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     is_ok_phrase = text in ("Я в порядке", "Я в порядке.")
     if text == "Назад в главное меню":
         context.user_data[STATE_KEY] = STATE_IDLE
+        context.user_data.pop(DRAFT_MESSAGE_KEY, None)
         await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard())
         return
     if text == "Написать новое сообщение":
         context.user_data[STATE_KEY] = STATE_WAIT_MESSAGE
+        context.user_data.pop(DRAFT_MESSAGE_KEY, None)
         await update.message.reply_text("Введите текст одним сообщением.", reply_markup=flow_keyboard())
         return
     if text == "Прочитать свои сообщения":
@@ -239,8 +285,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         if not text:
             await update.message.reply_text("Пустой текст. Введите сообщение еще раз.")
             return
+        context.user_data[DRAFT_MESSAGE_KEY] = text
+        context.user_data[STATE_KEY] = STATE_WAIT_FIRST_PERIOD
+        await update.message.reply_text(
+            "Выберите период до первого опроса.\n"
+            "Второй опрос будет через 3 часа после первого, третий - еще через 1 час.",
+            reply_markup=first_period_keyboard(),
+        )
+        return
+    if state == STATE_WAIT_FIRST_PERIOD:
+        user = update.effective_user
+        if not user:
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard())
+            context.user_data[STATE_KEY] = STATE_IDLE
+            context.user_data.pop(DRAFT_MESSAGE_KEY, None)
+            return
+        period = parse_first_period_choice(text)
+        if period is None:
+            await update.message.reply_text("Выберите один из вариантов периода кнопками ниже.", reply_markup=first_period_keyboard())
+            return
+        draft_message = context.user_data.get(DRAFT_MESSAGE_KEY, "").strip()
+        if not draft_message:
+            context.user_data[STATE_KEY] = STATE_IDLE
+            await update.message.reply_text("Текст сообщения не найден. Введите сообщение заново.", reply_markup=main_menu_keyboard())
+            return
         try:
             sent_at = (update.message.date if update.message else None) or datetime.now(timezone.utc)
+            check1_delay, check2_delay, check3_delay, message_mode = period
             response = api_post(
                 "/api/messages",
                 {
@@ -248,17 +319,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "username": user.username,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
-                    "message": text,
+                    "message": draft_message,
+                    "message_mode": message_mode,
+                    "check1_delay_seconds": check1_delay,
+                    "check2_delay_seconds": check2_delay,
+                    "check3_delay_seconds": check3_delay,
                 },
             )
             if not response.ok:
                 raise RuntimeError(f"api status {response.status_code}")
             context.user_data[STATE_KEY] = STATE_IDLE
+            context.user_data.pop(DRAFT_MESSAGE_KEY, None)
             sender_username = f"@{user.username}" if user.username else "-"
             sender_name = " ".join(x for x in [user.first_name, user.last_name] if x) or "Пользователь"
             await update.message.reply_text(
                 "Сообщение сохранено.\n\n"
-                f"Текст: {text}\n"
+                f"Текст: {draft_message}\n"
                 f"Отправитель: {sender_name} (username: {sender_username}, id: {user.id})\n"
                 f"Время отправки: {sent_at.astimezone().strftime('%d.%m.%Y %H:%M:%S')}",
                 reply_markup=main_menu_keyboard(),
@@ -268,6 +344,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             logger.exception("Failed to create message")
             await update.message.reply_text("Не удалось сохранить сообщение в базу.", reply_markup=main_menu_keyboard())
             context.user_data[STATE_KEY] = STATE_IDLE
+            context.user_data.pop(DRAFT_MESSAGE_KEY, None)
             return
     await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard())
 

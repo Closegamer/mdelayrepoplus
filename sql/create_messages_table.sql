@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS messages (
     firstname TEXT,
     lastname TEXT,
     message TEXT NOT NULL,
+    message_mode TEXT NOT NULL DEFAULT 'Реальный',
     timecreated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     check1_time TIMESTAMPTZ,
     check1_res TEXT,
@@ -14,7 +15,10 @@ CREATE TABLE IF NOT EXISTS messages (
     check2_is_text BOOLEAN NOT NULL DEFAULT FALSE,
     check3_time TIMESTAMPTZ,
     check3_res TEXT,
-    check3_is_text BOOLEAN NOT NULL DEFAULT FALSE
+    check3_is_text BOOLEAN NOT NULL DEFAULT FALSE,
+    check1_delay_seconds INTEGER NOT NULL DEFAULT 3600,
+    check2_delay_seconds INTEGER NOT NULL DEFAULT 3600,
+    check3_delay_seconds INTEGER NOT NULL DEFAULT 3600
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_userid ON messages(userid);

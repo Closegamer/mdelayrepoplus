@@ -7,6 +7,10 @@ class MessageCreate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     message: str = Field(min_length=1)
+    message_mode: str | None = None
+    check1_delay_seconds: int | None = Field(default=None, ge=60)
+    check2_delay_seconds: int | None = Field(default=None, ge=60)
+    check3_delay_seconds: int | None = Field(default=None, ge=60)
 
 class MessageResponseIn(BaseModel):
     user_id: int
@@ -19,6 +23,7 @@ class MessageOut(BaseModel):
     first_name: str | None
     last_name: str | None
     message: str
+    message_mode: str
     timecreated: datetime
     check1_time: datetime | None
     check1_res: str | None
@@ -29,6 +34,9 @@ class MessageOut(BaseModel):
     check3_time: datetime | None
     check3_res: str | None
     check3_is_text: bool
+    check1_delay_seconds: int
+    check2_delay_seconds: int
+    check3_delay_seconds: int
 
 class ActiveCheckOut(BaseModel):
     message_id: int

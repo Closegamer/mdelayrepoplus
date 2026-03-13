@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 import streamlit as st
 
@@ -44,6 +44,10 @@ def api_get(path: str, params: dict | None = None):
     response = requests.get(f"{API_BASE_URL}{path}", params=params, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json()
+
+def api_delete(path: str):
+    response = requests.delete(f"{API_BASE_URL}{path}", timeout=TIMEOUT_SECONDS)
+    return response
 
 def ensure_auth_state() -> None:
     if "logged_in" not in st.session_state:
@@ -124,6 +128,21 @@ def row_result_status(item: dict) -> str:
         return "Тревога"
     return "-"
 
+def format_first_request_time(item: dict) -> str:
+    check1_time = item.get("check1_time")
+    if check1_time:
+        return format_created_at(check1_time)
+    time_created = item.get("timecreated")
+    delay_seconds = int(item.get("check1_delay_seconds") or 0)
+    if not time_created or delay_seconds <= 0:
+        return "-"
+    raw = str(time_created).replace("Z", "+00:00")
+    try:
+        created_dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return "-"
+    return (created_dt + timedelta(seconds=delay_seconds)).strftime("%d.%m.%Y %H:%M")
+
 def map_table_rows(rows: list[dict]) -> list[dict]:
     mapped = []
     for item in rows:
@@ -134,8 +153,10 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
                 "ID": item.get("id"),
                 "UserID": item.get("user_id"),
                 "Username": item.get("username") or "-",
+                "Режим": item.get("message_mode") or "Реальный",
                 "Сообщение": shorten_message(item.get("message") or ""),
                 "Создано": format_created_at(item.get("timecreated")),
+                "Первый запрос": format_first_request_time(item),
                 "Слежение": tracking,
                 "Результат": result,
             }
@@ -172,7 +193,26 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
             st.session_state[page_key] = max(0, offset - page_size)
             st.rerun()
         return
-    st.table(map_table_rows(rows))
+    mapped_rows = map_table_rows(rows)
+    st.table(mapped_rows)
+    ids = [row.get("ID") for row in mapped_rows if row.get("ID") is not None]
+    if ids:
+        delete_select_col, delete_btn_col, _ = st.columns([3, 2, 5], vertical_alignment="bottom")
+        with delete_select_col:
+            selected_id = st.selectbox("ID для удаления", ids, key=f"{page_key}_delete_id")
+        with delete_btn_col:
+            if st.button("Удалить запись", key=f"{page_key}_delete_button", use_container_width=True):
+                try:
+                    response = api_delete(f"/api/admin/messages/{selected_id}")
+                    if response.status_code == 204:
+                        st.success(f"Запись {selected_id} удалена.")
+                        st.rerun()
+                    elif response.status_code == 404:
+                        st.warning("Запись не найдена или уже удалена.")
+                    else:
+                        st.error("Не удалось удалить запись.")
+                except Exception as exc:
+                    st.error(f"Ошибка удаления: {exc}")
     page_number = (offset // page_size) + 1
     _, nav_left, nav_center, nav_right, _ = st.columns([2, 2, 2, 2, 2], vertical_alignment="center")
     with nav_left:
@@ -199,15 +239,19 @@ def render_header() -> None:
             st.rerun()
 
 def render_filters() -> int:
-    f1, f2, _ = st.columns([2, 1, 7], vertical_alignment="bottom")
+    f1, f2, f3, _ = st.columns([2, 1, 1, 6], vertical_alignment="bottom")
     with f1:
         page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
     with f2:
         apply_clicked = st.button("Применить", use_container_width=True)
+    with f3:
+        refresh_clicked = st.button("Обновить", use_container_width=True)
     if apply_clicked:
         st.session_state["messages_offset"] = 0
         st.session_state["alerts_offset"] = 0
         st.session_state["active_offset"] = 0
+        st.rerun()
+    if refresh_clicked:
         st.rerun()
     return page_size
 

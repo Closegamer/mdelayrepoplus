@@ -1,10 +1,12 @@
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.db import Base, SessionLocal, engine
 from app.models import Message
 from app.schemas import ActiveCheckOut, AdminOverviewOut, HealthOut, MessageCreate, MessageOut, MessageResponseIn
 from app.services import (
     create_message,
+    delete_message_by_id,
     delete_user_message,
     get_active_check_for_user,
     get_admin_overview,
@@ -27,6 +29,11 @@ def get_db():
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_mode TEXT NOT NULL DEFAULT 'Реальный'"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check1_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check2_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check3_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
 
 @app.get("/health", response_model=HealthOut)
 def health() -> HealthOut:
@@ -40,6 +47,7 @@ def _to_out(item: Message) -> MessageOut:
         first_name=item.firstname,
         last_name=item.lastname,
         message=item.message,
+        message_mode=item.message_mode,
         timecreated=item.timecreated,
         check1_time=item.check1_time,
         check1_res=item.check1_res,
@@ -50,6 +58,9 @@ def _to_out(item: Message) -> MessageOut:
         check3_time=item.check3_time,
         check3_res=item.check3_res,
         check3_is_text=item.check3_is_text,
+        check1_delay_seconds=item.check1_delay_seconds,
+        check2_delay_seconds=item.check2_delay_seconds,
+        check3_delay_seconds=item.check3_delay_seconds,
     )
 
 @app.post("/api/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
@@ -61,6 +72,10 @@ def create_message_endpoint(payload: MessageCreate, db: Session = Depends(get_db
         first_name=payload.first_name,
         last_name=payload.last_name,
         message_text=payload.message,
+        message_mode=payload.message_mode,
+        check1_delay_seconds=payload.check1_delay_seconds,
+        check2_delay_seconds=payload.check2_delay_seconds,
+        check3_delay_seconds=payload.check3_delay_seconds,
     )
     return _to_out(obj)
 
@@ -104,6 +119,11 @@ def admin_messages_endpoint(
 ) -> list[MessageOut]:
     rows = list_recent_messages(db, limit=limit, offset=offset)
     return [_to_out(item) for item in rows]
+
+@app.delete("/api/admin/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT)
+def admin_delete_message_endpoint(message_id: int, db: Session = Depends(get_db)) -> None:
+    if not delete_message_by_id(db, message_id=message_id):
+        raise HTTPException(status_code=404, detail="Message not found")
 
 @app.get("/api/admin/alerts", response_model=list[MessageOut])
 def admin_alerts_endpoint(
