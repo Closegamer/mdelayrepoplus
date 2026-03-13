@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 from typing import Callable
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
@@ -11,6 +12,11 @@ ESCALATED_TEXT = "ESCALATED"
 
 CheckSender = Callable[[Message, int], bool]
 EscalationSender = Callable[[Message], bool]
+
+def _normalize_ok_text(value: str) -> str:
+    lowered = value.strip().lower().replace("ё", "е")
+    lowered = re.sub(r"\s+", " ", lowered)
+    return lowered.strip(" .,!?:;")
 
 def create_message(
     db: Session,
@@ -54,7 +60,7 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
     if not pending:
         return None
     answer = response_text.strip()
-    is_ok = answer in (OK_TEXT, f"{OK_TEXT}.", OK_TEXT.lower(), f"{OK_TEXT.lower()}.")
+    is_ok = _normalize_ok_text(answer) == _normalize_ok_text(OK_TEXT)
     value = OK_TEXT if is_ok else answer
     if pending.check1_res == SENT_TEXT:
         pending.check1_res = value
