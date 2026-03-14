@@ -8,6 +8,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
+ARCHITECT_USERNAME = "closegamer"
 STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
@@ -50,15 +51,19 @@ def api_post(path: str, payload: dict) -> requests.Response:
 def api_delete(path: str, params: dict | None = None) -> requests.Response:
     return requests.delete(f"{API_BASE_URL}{path}", params=params, timeout=15)
 
+# Проверка доступа к кнопке архитектора
+def is_architect_username(username: str | None) -> bool:
+    return bool(username and username.lower() == ARCHITECT_USERNAME)
+
 # Возврат клавиатуры главного меню
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        [
-            ["Написать новое сообщение"],
-            ["Прочитать свои сообщения"],
-        ],
-        resize_keyboard=True,
-    )
+def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
+    buttons = [
+        ["Написать новое сообщение"],
+        ["Прочитать свои сообщения"],
+    ]
+    if is_architect_username(username):
+        buttons.append(["Архитектор"])
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 # Возврат клавиатуры для шага ввода
 def flow_keyboard() -> ReplyKeyboardMarkup:
@@ -215,13 +220,13 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
                 f"id сообщения: {recorded.get('id')}\n"
                 f"Время создания: {created_text}\n"
                 f"Ваш ответ: {text}",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=main_menu_keyboard(user.username),
             )
         except Exception:
             logger.exception("Failed to send immediate emergency alert")
             await update.message.reply_text(
                 "Ответ на проверку сохранен, но аварийное сообщение пока не отправилось.",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=main_menu_keyboard(user.username),
             )
         return True
     await update.message.reply_text(
@@ -229,7 +234,7 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
         "Бот прекращает следить за этим сообщением.\n\n"
         f"Время создания: {created_text}\n"
         f"Исходное сообщение: {recorded.get('message', '')}\n",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(user.username),
     )
     return True
 
@@ -241,7 +246,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     first_name = (user.first_name if user else None) or "<Ваше имя не распознано>"
     await update.message.reply_text(
         start_text(first_name),
-        reply_markup=main_menu_keyboard(),
+        reply_markup=main_menu_keyboard(user.username if user else None),
     )
 
 # Показ пользователю списка его сообщений
@@ -256,9 +261,15 @@ async def show_user_messages(update: Update) -> None:
             raise RuntimeError(f"api status {response.status_code}")
         items = response.json()
         if not items:
-            await update.message.reply_text("У вас пока нет сохраненных сообщений.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text(
+                "У вас пока нет сохраненных сообщений.",
+                reply_markup=main_menu_keyboard(user.username),
+            )
             return
-        await update.message.reply_text(f"Ваши сообщения ({len(items)}):", reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            f"Ваши сообщения ({len(items)}):",
+            reply_markup=main_menu_keyboard(user.username),
+        )
         for idx, item in enumerate(items, start=1):
             tracking = message_tracking_status(item)
             result = message_result_status(item)
@@ -271,18 +282,70 @@ async def show_user_messages(update: Update) -> None:
             await update.message.reply_text(text, reply_markup=message_delete_keyboard(item["id"]))
     except Exception:
         logger.exception("Failed to load messages")
-        await update.message.reply_text("Не удалось прочитать сообщения из базы.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text(
+            "Не удалось прочитать сообщения из базы.",
+            reply_markup=main_menu_keyboard(user.username),
+        )
+
+# Формирование сводки архитектора по данным админки
+def build_architect_summary(overview: dict) -> str:
+    total = int(overview.get("total_messages") or 0)
+    active = int(overview.get("active_checks") or 0)
+    alerts = int(overview.get("total_alerts") or 0)
+    completed = max(total - active, 0)
+    return (
+        "Отчет архитектора\n\n"
+        f"Всего заявок в базе: {total}\n"
+        f"В процессе: {active}\n"
+        f"Завершено: {completed}\n"
+        f"Тревоги: {alerts}\n"
+        f"Пользователи: {int(overview.get('total_users') or 0)}\n"
+        f"Check1 SENT: {int(overview.get('check1_sent') or 0)}\n"
+        f"Check2 SENT: {int(overview.get('check2_sent') or 0)}\n"
+        f"Check3 SENT: {int(overview.get('check3_sent') or 0)}"
+    )
+
+# Отправка сводки архитектора для привилегированного пользователя
+async def show_architect_summary(update: Update) -> None:
+    user = update.effective_user
+    username = user.username if user else None
+    if not is_architect_username(username):
+        await update.message.reply_text(
+            "Команда недоступна",
+            reply_markup=main_menu_keyboard(username),
+        )
+        return
+    try:
+        response = api_get("/api/admin/overview")
+        if not response.ok:
+            raise RuntimeError(f"api status {response.status_code}")
+        await update.message.reply_text(
+            build_architect_summary(response.json()),
+            reply_markup=main_menu_keyboard(username),
+        )
+    except Exception:
+        logger.exception("Failed to load architect summary")
+        await update.message.reply_text(
+            "Не удалось получить отчет архитектора",
+            reply_markup=main_menu_keyboard(username),
+        )
 
 # Обработка текстовых сообщений пользователя
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
+    user = update.effective_user
+    username = user.username if user else None
     text = (update.message.text or "").strip()
     state = context.user_data.get(STATE_KEY, STATE_IDLE)
     is_ok_phrase = is_ok_text(text)
     if text == "Назад в главное меню":
         context.user_data[STATE_KEY] = STATE_IDLE
         context.user_data.pop(DRAFT_MESSAGE_KEY, None)
-        await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard(username))
+        return
+    if text == "Архитектор":
+        context.user_data[STATE_KEY] = STATE_IDLE
+        await show_architect_summary(update)
         return
     if text == "Написать новое сообщение":
         context.user_data[STATE_KEY] = STATE_WAIT_MESSAGE
@@ -299,11 +362,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 accepted = await try_submit_check_response(update, context, OK_CANONICAL_TEXT)
                 if accepted:
                     return
-                await update.message.reply_text("Нет активной проверки для подтверждения.", reply_markup=main_menu_keyboard())
+                await update.message.reply_text(
+                    "Нет активной проверки для подтверждения.",
+                    reply_markup=main_menu_keyboard(username),
+                )
                 return
             except Exception:
                 logger.exception("Failed to submit check response")
-                await update.message.reply_text("Не удалось обработать ответ.", reply_markup=main_menu_keyboard())
+                await update.message.reply_text(
+                    "Не удалось обработать ответ.",
+                    reply_markup=main_menu_keyboard(username),
+                )
                 return
         try:
             accepted = await try_submit_check_response(update, context, text)
@@ -311,12 +380,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 return
         except Exception:
             logger.exception("Failed to submit check response")
-            await update.message.reply_text("Не удалось отправить ответ на проверку.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text(
+                "Не удалось отправить ответ на проверку.",
+                reply_markup=main_menu_keyboard(username),
+            )
             return
     if state == STATE_WAIT_MESSAGE:
-        user = update.effective_user
         if not user:
-            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(username))
             context.user_data[STATE_KEY] = STATE_IDLE
             return
         if not text:
@@ -331,9 +402,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         )
         return
     if state == STATE_WAIT_FIRST_PERIOD:
-        user = update.effective_user
         if not user:
-            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(username))
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
             return
@@ -344,7 +414,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         draft_message = context.user_data.get(DRAFT_MESSAGE_KEY, "").strip()
         if not draft_message:
             context.user_data[STATE_KEY] = STATE_IDLE
-            await update.message.reply_text("Текст сообщения не найден. Введите сообщение заново.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text(
+                "Текст сообщения не найден. Введите сообщение заново.",
+                reply_markup=main_menu_keyboard(username),
+            )
             return
         try:
             sent_at = (update.message.date if update.message else None) or datetime.now(timezone.utc)
@@ -374,16 +447,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 f"Текст: {draft_message}\n"
                 f"Отправитель: {sender_name} (username: {sender_username}, id: {user.id})\n"
                 f"Время отправки: {sent_at.astimezone().strftime('%d.%m.%Y %H:%M:%S')}",
-                reply_markup=main_menu_keyboard(),
+                reply_markup=main_menu_keyboard(username),
             )
             return
         except Exception:
             logger.exception("Failed to create message")
-            await update.message.reply_text("Не удалось сохранить сообщение в базу.", reply_markup=main_menu_keyboard())
+            await update.message.reply_text(
+                "Не удалось сохранить сообщение в базу.",
+                reply_markup=main_menu_keyboard(username),
+            )
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
             return
-    await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard())
+    await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard(username))
 
 # Обработка нажатий inline кнопок
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
