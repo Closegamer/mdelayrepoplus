@@ -13,6 +13,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Отправка сообщения в Telegram API
 def _send_telegram_message(chat_id: int | str, text: str) -> bool:
     if not settings.bot_token:
         logger.warning("BOT_TOKEN is not set, skip telegram send")
@@ -28,6 +29,7 @@ def _send_telegram_message(chat_id: int | str, text: str) -> bool:
         logger.exception("Telegram send failed")
         return False
 
+# Отправка очередного контрольного опроса пользователю
 def _send_check(row, check_no: int) -> bool:
     source_message = escape(str(row.message or ""))
     text = (
@@ -39,6 +41,7 @@ def _send_check(row, check_no: int) -> bool:
     )
     return _send_telegram_message(row.userid, text)
 
+# Отправка аварийного сообщения в чат оповещений
 def _send_escalation(row) -> bool:
     if not settings.alert_chat_id:
         logger.warning("ALERT_CHAT_ID is not set, skip escalation")
@@ -65,6 +68,7 @@ def _send_escalation(row) -> bool:
     )
     return _send_telegram_message(settings.alert_chat_id, text)
 
+# Выполнение одного цикла обработки проверок
 def run_once() -> None:
     db = SessionLocal()
     try:
@@ -72,6 +76,7 @@ def run_once() -> None:
     finally:
         db.close()
 
+# Запуск бесконечного цикла cron воркера
 def main() -> None:
     Base.metadata.create_all(bind=engine)
     logger.info("Cron worker started with poll interval %ss", settings.scheduler_poll_seconds)

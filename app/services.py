@@ -13,11 +13,13 @@ ESCALATED_TEXT = "ESCALATED"
 CheckSender = Callable[[Message, int], bool]
 EscalationSender = Callable[[Message], bool]
 
+# Нормализация текста для сравнения фразы подтверждения
 def _normalize_ok_text(value: str) -> str:
     lowered = value.strip().lower().replace("ё", "е")
     lowered = re.sub(r"\s+", " ", lowered)
     return lowered.strip(" .,!?:;")
 
+# Создание нового сообщения для отслеживания
 def create_message(
     db: Session,
     user_id: int,
@@ -46,19 +48,23 @@ def create_message(
     db.refresh(obj)
     return obj
 
+# Возврат сообщений пользователя в обратном порядке
 def list_user_messages(db: Session, user_id: int) -> list[Message]:
     return db.query(Message).filter(Message.userid == user_id).order_by(Message.id.desc()).all()
 
+# Удаление сообщения пользователя по идентификатору
 def delete_user_message(db: Session, user_id: int, message_id: int) -> bool:
     deleted = db.query(Message).filter(Message.id == message_id, Message.userid == user_id).delete()
     db.commit()
     return deleted > 0
 
+# Удаление сообщения по идентификатору без привязки к пользователю
 def delete_message_by_id(db: Session, message_id: int) -> bool:
     deleted = db.query(Message).filter(Message.id == message_id).delete()
     db.commit()
     return deleted > 0
 
+# Сохранение ответа пользователя в текущий активный этап проверки
 def submit_response(db: Session, user_id: int, response_text: str) -> Message | None:
     pending = (
         db.query(Message)
@@ -101,6 +107,7 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
     db.refresh(pending)
     return pending
 
+# Возврат данных об активной проверке пользователя
 def get_active_check_for_user(db: Session, user_id: int) -> dict | None:
     pending = (
         db.query(Message)
@@ -132,6 +139,7 @@ def get_active_check_for_user(db: Session, user_id: int) -> dict | None:
         "response_deadline_seconds": deadline,
     }
 
+# Приведение времени к формату с часовым поясом
 def _dt_aware(value: datetime | None) -> datetime | None:
     if value is None:
         return None
@@ -139,11 +147,13 @@ def _dt_aware(value: datetime | None) -> datetime | None:
         return value.replace(tzinfo=timezone.utc)
     return value
 
+# Определение завершенности отслеживания для сообщения
 def _is_finished(row: Message) -> bool:
     if row.check3_res == ESCALATED_TEXT:
         return True
     return row.check1_res == OK_TEXT or row.check2_res == OK_TEXT or row.check3_res == OK_TEXT
 
+# Выполнение одного шага планировщика проверок
 def worker_step(
     db: Session,
     on_send_check: CheckSender | None = None,
@@ -190,6 +200,7 @@ def worker_step(
                 row.check3_is_text = False
     db.commit()
 
+# Формирование условия выборки активных проверок
 def _active_condition():
     return and_(
         or_(Message.check3_res.is_(None), Message.check3_res != ESCALATED_TEXT),
@@ -198,9 +209,11 @@ def _active_condition():
         or_(Message.check3_res.is_(None), Message.check3_res != OK_TEXT),
     )
 
+# Возврат последних сообщений с пагинацией
 def list_recent_messages(db: Session, limit: int, offset: int) -> list[Message]:
     return db.query(Message).order_by(Message.id.desc()).offset(offset).limit(limit).all()
 
+# Возврат тревожных сообщений с пагинацией
 def list_alert_messages(db: Session, limit: int, offset: int) -> list[Message]:
     return (
         db.query(Message)
@@ -211,6 +224,7 @@ def list_alert_messages(db: Session, limit: int, offset: int) -> list[Message]:
         .all()
     )
 
+# Возврат активных проверок с пагинацией
 def list_active_checks(db: Session, limit: int, offset: int) -> list[Message]:
     return (
         db.query(Message)
@@ -221,6 +235,7 @@ def list_active_checks(db: Session, limit: int, offset: int) -> list[Message]:
         .all()
     )
 
+# Возврат агрегированных метрик для админки
 def get_admin_overview(db: Session) -> dict:
     total_messages = db.query(func.count(Message.id)).scalar() or 0
     total_users = db.query(func.count(func.distinct(Message.userid))).scalar() or 0

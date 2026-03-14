@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Формирование приветственного текста для команды /start
 def start_text(first_name: str) -> str:
     return (
         f"Здравствуйте, {first_name}! Вас приветствует бот mDelay!\n\n"
@@ -37,15 +38,19 @@ def start_text(first_name: str) -> str:
         "Удачи Вам! Не теряйтесь - кому-то может быть без Вас грустно!\n\n"
     )
 
+# Выполнение GET запроса к API
 def api_get(path: str, params: dict | None = None) -> requests.Response:
     return requests.get(f"{API_BASE_URL}{path}", params=params, timeout=15)
 
+# Выполнение POST запроса к API
 def api_post(path: str, payload: dict) -> requests.Response:
     return requests.post(f"{API_BASE_URL}{path}", json=payload, timeout=15)
 
+# Выполнение DELETE запроса к API
 def api_delete(path: str, params: dict | None = None) -> requests.Response:
     return requests.delete(f"{API_BASE_URL}{path}", params=params, timeout=15)
 
+# Возврат клавиатуры главного меню
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
@@ -55,9 +60,11 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
     )
 
+# Возврат клавиатуры для шага ввода
 def flow_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([["Назад в главное меню"]], resize_keyboard=True)
 
+# Возврат клавиатуры выбора первого периода
 def first_period_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         [
@@ -71,6 +78,7 @@ def first_period_keyboard() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
     )
 
+# Преобразование выбранного периода в задержки проверок
 def parse_first_period_choice(text: str) -> tuple[int, int, int, str] | None:
     if text == "Первый опрос через 1 час":
         return 1 * 60 * 60, DEFAULT_SECOND_DELAY_SECONDS, DEFAULT_THIRD_DELAY_SECONDS, "Реальный"
@@ -90,9 +98,11 @@ def parse_first_period_choice(text: str) -> tuple[int, int, int, str] | None:
         return 60, 60, 60, "Тестовый"
     return None
 
+# Возврат inline клавиатуры удаления сообщения
 def message_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton("Удалить", callback_data=f"msg_delete:{message_id}")]])
 
+# Возврат inline клавиатуры подтверждения удаления
 def confirm_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[
@@ -101,16 +111,19 @@ def confirm_delete_keyboard(message_id: int) -> InlineKeyboardMarkup:
         ]]
     )
 
+# Инициализация состояния диалога пользователя
 def ensure_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     if STATE_KEY not in context.user_data:
         context.user_data[STATE_KEY] = STATE_IDLE
 
+# Определение статуса слежения для сообщения
 def message_tracking_status(item: dict) -> str:
     is_finished = item.get("check3_res") == "ESCALATED" or any(
         item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")
     )
     return "Завершено" if is_finished else "Выполняется"
 
+# Определение итогового результата обработки сообщения
 def message_result_status(item: dict) -> str:
     if any(item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")):
         return "Порядок"
@@ -118,6 +131,7 @@ def message_result_status(item: dict) -> str:
         return "Тревога"
     return "-"
 
+# Форматирование даты из API в локальный вид
 def format_api_datetime(value: str | None) -> str:
     if not value:
         return "-"
@@ -130,15 +144,18 @@ def format_api_datetime(value: str | None) -> str:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone().strftime("%d.%m.%Y %H:%M:%S")
 
+# Нормализация текста ответа пользователя
 def normalize_ok_input(value: str) -> str:
     normalized = value.strip().lower().replace("ё", "е")
     normalized = re.sub(r"\s+", " ", normalized)
     normalized = normalized.strip(" .,!?:;\"'`~+-=_()[]{}<>")
     return normalized
 
+# Проверка эквивалентности ответа фразе Я в порядке
 def is_ok_text(value: str) -> bool:
     return normalize_ok_input(value) in OK_NORMALIZED_VARIANTS
 
+# Определение создания сообщения в тестовом режиме
 def is_test_period_message(recorded: dict) -> bool:
     if recorded.get("message_mode") == "Тестовый":
         return True
@@ -148,6 +165,7 @@ def is_test_period_message(recorded: dict) -> bool:
         and int(recorded.get("check3_delay_seconds") or 0) == 60
     )
 
+# Отправка немедленного аварийного сообщения
 async def send_emergency_now(
     context: ContextTypes.DEFAULT_TYPE,
     user,
@@ -173,6 +191,7 @@ async def send_emergency_now(
     )
     await context.bot.send_message(chat_id=ALERT_CHAT_ID, text=alert_text)
 
+# Попытка сохранения ответа на активную проверку
 async def try_submit_check_response(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
     user = update.effective_user
     if not user:
@@ -214,6 +233,7 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
     )
     return True
 
+# Обработка команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
     context.user_data[STATE_KEY] = STATE_IDLE
@@ -224,6 +244,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=main_menu_keyboard(),
     )
 
+# Показ пользователю списка его сообщений
 async def show_user_messages(update: Update) -> None:
     user = update.effective_user
     if not user:
@@ -252,6 +273,7 @@ async def show_user_messages(update: Update) -> None:
         logger.exception("Failed to load messages")
         await update.message.reply_text("Не удалось прочитать сообщения из базы.", reply_markup=main_menu_keyboard())
 
+# Обработка текстовых сообщений пользователя
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
     text = (update.message.text or "").strip()
@@ -363,6 +385,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
     await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard())
 
+# Обработка нажатий inline кнопок
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     if not query:
@@ -416,12 +439,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         logger.exception("Failed to delete message")
         await query.answer("Не удалось удалить сообщение.", show_alert=True)
 
+# Регистрация команд бота в меню Telegram
 async def setup_bot_commands(application: Application) -> None:
     try:
         await application.bot.set_my_commands([BotCommand("start", "Главное меню")])
     except Exception:
         logger.exception("Failed to set bot commands")
 
+# Точка входа для запуска Telegram бота
 def main() -> None:
     token = os.getenv("BOT_TOKEN")
     if not token:

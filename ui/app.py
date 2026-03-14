@@ -11,12 +11,14 @@ TIMEOUT_SECONDS = 15
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 LOGIN_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
 
+# Создание токена авторизации для сохранения входа
 def make_login_token(password: str, timestamp: int | None = None) -> str:
     ts = int(timestamp or time.time())
     payload = str(ts).encode("utf-8")
     digest = hmac.new(password.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     return f"{ts}.{digest}"
 
+# Проверка валидности токена авторизации
 def is_login_token_valid(password: str, token: str) -> bool:
     if not password or not token or "." not in token:
         return False
@@ -30,6 +32,7 @@ def is_login_token_valid(password: str, token: str) -> bool:
     expected = make_login_token(password, ts).split(".", 1)[1]
     return hmac.compare_digest(signature, expected)
 
+# Подключение глобальных стилей страницы
 def inject_global_styles() -> None:
     st.markdown(
         """
@@ -63,15 +66,18 @@ def inject_global_styles() -> None:
         unsafe_allow_html=True,
     )
 
+# Выполнение GET запроса к API и возврат JSON
 def api_get(path: str, params: dict | None = None):
     response = requests.get(f"{API_BASE_URL}{path}", params=params, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     return response.json()
 
+# Выполнение DELETE запроса к API
 def api_delete(path: str):
     response = requests.delete(f"{API_BASE_URL}{path}", timeout=TIMEOUT_SECONDS)
     return response
 
+# Инициализация состояния авторизации в сессии
 def ensure_auth_state() -> None:
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
@@ -82,6 +88,7 @@ def ensure_auth_state() -> None:
     if is_login_token_valid(configured_password, auth_token):
         st.session_state.logged_in = True
 
+# Рендер формы входа в админку
 def render_login() -> bool:
     st.markdown(
         """
@@ -118,6 +125,7 @@ def render_login() -> bool:
             st.error("Неверный пароль.")
     return st.session_state.logged_in
 
+# Рендер блока основных метрик
 def render_overview() -> None:
     overview = api_get("/api/admin/overview")
     c1, c2, c3, c4 = st.columns(4)
@@ -137,6 +145,7 @@ def render_overview() -> None:
     with c7:
         render_kpi_card("Check3 SENT", overview["check3_sent"], "default")
 
+# Рендер карточки одной метрики
 def render_kpi_card(label: str, value: int, tone: str) -> None:
     st.markdown(
         (
@@ -148,12 +157,14 @@ def render_kpi_card(label: str, value: int, tone: str) -> None:
         unsafe_allow_html=True,
     )
 
+# Вычисление статуса слежения для строки таблицы
 def row_tracking_status(item: dict) -> str:
     is_finished = item.get("check3_res") == "ESCALATED" or any(
         item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")
     )
     return "Завершено" if is_finished else "Выполняется"
 
+# Вычисление итогового результата для строки таблицы
 def row_result_status(item: dict) -> str:
     if any(item.get(field) == "Я в порядке" for field in ("check1_res", "check2_res", "check3_res")):
         return "Порядок"
@@ -161,6 +172,7 @@ def row_result_status(item: dict) -> str:
         return "Тревога"
     return "-"
 
+# Форматирование ответа конкретной проверки
 def format_check_response(item: dict, check_no: int) -> str:
     value = item.get(f"check{check_no}_res")
     if not value or value == "SENT":
@@ -174,6 +186,7 @@ def format_check_response(item: dict, check_no: int) -> str:
         return "Тревога"
     return value
 
+# Вычисление времени первого запроса
 def format_first_request_time(item: dict) -> str:
     check1_time = item.get("check1_time")
     if check1_time:
@@ -189,6 +202,7 @@ def format_first_request_time(item: dict) -> str:
         return "-"
     return (created_dt + timedelta(seconds=delay_seconds)).strftime("%d.%m.%Y %H:%M")
 
+# Преобразование API записей в формат таблицы UI
 def map_table_rows(rows: list[dict]) -> list[dict]:
     mapped = []
     for item in rows:
@@ -212,11 +226,13 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
         )
     return mapped
 
+# Сокращение длинного текста сообщения
 def shorten_message(value: str, limit: int = 90) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 1].rstrip() + "..."
 
+# Форматирование даты в человекочитаемый вид
 def format_created_at(value: str | None) -> str:
     if not value:
         return "-"
@@ -227,10 +243,12 @@ def format_created_at(value: str | None) -> str:
     except ValueError:
         return value
 
+# Инициализация смещения пагинации для вкладки
 def ensure_page_offset_state(key: str) -> None:
     if key not in st.session_state:
         st.session_state[key] = 0
 
+# Рендер таблицы с пагинацией и удалением
 def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> None:
     ensure_page_offset_state(page_key)
     offset = int(st.session_state[page_key])
@@ -278,6 +296,7 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
         st.session_state[page_key] = offset + page_size
         st.rerun()
 
+# Рендер верхней части страницы и кнопки выхода
 def render_header() -> None:
     left, right = st.columns([9, 1], vertical_alignment="top")
     with left:
@@ -289,6 +308,7 @@ def render_header() -> None:
                 del st.query_params["auth"]
             st.rerun()
 
+# Рендер панели фильтров и управления страницей
 def render_filters() -> int:
     f1, f2, f3, _ = st.columns([2, 1, 1, 6], vertical_alignment="bottom")
     with f1:
@@ -306,6 +326,7 @@ def render_filters() -> int:
         st.rerun()
     return page_size
 
+# Рендер нижнего футера страницы
 def render_footer() -> None:
     st.markdown("---")
     st.markdown(
@@ -313,6 +334,7 @@ def render_footer() -> None:
         unsafe_allow_html=True,
     )
 
+# Точка входа Streamlit приложения
 def main() -> None:
     st.set_page_config(page_title="mDelayPlusBot Admin", layout="wide")
     inject_global_styles()
