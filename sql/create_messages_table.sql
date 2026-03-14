@@ -24,3 +24,14 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_userid ON messages(userid);
 CREATE INDEX IF NOT EXISTS idx_messages_timecreated ON messages(timecreated);
+
+CREATE TABLE IF NOT EXISTS user_contacts (
+    userid BIGINT PRIMARY KEY,
+    username TEXT,
+    firstname TEXT,
+    lastname TEXT,
+    contact_text TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_contacts_userid ON user_contacts(userid);

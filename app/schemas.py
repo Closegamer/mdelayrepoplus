@@ -16,6 +16,19 @@ class MessageResponseIn(BaseModel):
     user_id: int
     response_text: str = Field(min_length=1)
 
+class UserContactUpsertIn(BaseModel):
+    contact_text: str = Field(min_length=1)
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+
+class UserContactOut(BaseModel):
+    user_id: int
+    contact_text: str
+    username: str | None
+    first_name: str | None
+    last_name: str | None
+
 class MessageOut(BaseModel):
     id: int
     user_id: int

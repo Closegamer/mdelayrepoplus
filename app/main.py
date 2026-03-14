@@ -3,11 +3,21 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.db import Base, SessionLocal, engine
 from app.models import Message
-from app.schemas import ActiveCheckOut, AdminOverviewOut, HealthOut, MessageCreate, MessageOut, MessageResponseIn
+from app.schemas import (
+    ActiveCheckOut,
+    AdminOverviewOut,
+    HealthOut,
+    MessageCreate,
+    MessageOut,
+    MessageResponseIn,
+    UserContactOut,
+    UserContactUpsertIn,
+)
 from app.services import (
     create_message,
     delete_message_by_id,
     delete_user_message,
+    get_user_contact,
     get_active_check_for_user,
     get_admin_overview,
     list_active_checks,
@@ -15,6 +25,7 @@ from app.services import (
     list_recent_messages,
     list_user_messages,
     submit_response,
+    upsert_user_contact,
 )
 
 app = FastAPI(title="mDelayPlusBot API", version="0.1.0")
@@ -115,6 +126,41 @@ def respond_endpoint(payload: MessageResponseIn, db: Session = Depends(get_db)) 
     if not pending:
         raise HTTPException(status_code=404, detail="No active check for this user")
     return _to_out(pending)
+
+# Преобразование контакта пользователя в схему API
+def _contact_to_out(item) -> UserContactOut:
+    return UserContactOut(
+        user_id=item.userid,
+        contact_text=item.contact_text,
+        username=item.username,
+        first_name=item.firstname,
+        last_name=item.lastname,
+    )
+
+@app.post("/api/users/{user_id}/contact", response_model=UserContactOut)
+# Сохранение контакта близкого человека для пользователя
+def upsert_user_contact_endpoint(
+    user_id: int,
+    payload: UserContactUpsertIn,
+    db: Session = Depends(get_db),
+) -> UserContactOut:
+    obj = upsert_user_contact(
+        db=db,
+        user_id=user_id,
+        contact_text=payload.contact_text,
+        username=payload.username,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+    )
+    return _contact_to_out(obj)
+
+@app.get("/api/users/{user_id}/contact", response_model=UserContactOut)
+# Получение контакта близкого человека для пользователя
+def get_user_contact_endpoint(user_id: int, db: Session = Depends(get_db)) -> UserContactOut:
+    obj = get_user_contact(db=db, user_id=user_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return _contact_to_out(obj)
 
 @app.get("/api/users/{user_id}/active-check", response_model=ActiveCheckOut)
 
