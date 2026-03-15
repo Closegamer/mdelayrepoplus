@@ -31,16 +31,3 @@ class Message(Base):
 
 Index("idx_messages_userid", Message.userid)
 Index("idx_messages_timecreated", Message.timecreated)
-
-class UserContact(Base):
-    __tablename__ = "user_contacts"
-    userid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    username: Mapped[str | None] = mapped_column(Text, nullable=True)
-    firstname: Mapped[str | None] = mapped_column(Text, nullable=True)
-    lastname: Mapped[str | None] = mapped_column(Text, nullable=True)
-    contact_text: Mapped[str] = mapped_column(Text, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-Index("idx_user_contacts_userid", UserContact.userid)

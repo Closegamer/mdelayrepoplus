@@ -4,7 +4,7 @@ from typing import Callable
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.models import Message, UserContact
+from app.models import Message
 
 OK_TEXT = "Я в порядке"
 SENT_TEXT = "SENT"
@@ -63,38 +63,6 @@ def delete_message_by_id(db: Session, message_id: int) -> bool:
     deleted = db.query(Message).filter(Message.id == message_id).delete()
     db.commit()
     return deleted > 0
-
-# Сохранение или обновление контакта близкого человека
-def upsert_user_contact(
-    db: Session,
-    user_id: int,
-    contact_text: str,
-    username: str | None = None,
-    first_name: str | None = None,
-    last_name: str | None = None,
-) -> UserContact:
-    obj = db.query(UserContact).filter(UserContact.userid == user_id).first()
-    if obj is None:
-        obj = UserContact(
-            userid=user_id,
-            username=username,
-            firstname=first_name,
-            lastname=last_name,
-            contact_text=contact_text.strip(),
-        )
-        db.add(obj)
-    else:
-        obj.contact_text = contact_text.strip()
-        obj.username = username
-        obj.firstname = first_name
-        obj.lastname = last_name
-    db.commit()
-    db.refresh(obj)
-    return obj
-
-# Получение контакта близкого человека по пользователю
-def get_user_contact(db: Session, user_id: int) -> UserContact | None:
-    return db.query(UserContact).filter(UserContact.userid == user_id).first()
 
 # Сохранение ответа пользователя в текущий активный этап проверки
 def submit_response(db: Session, user_id: int, response_text: str) -> Message | None:

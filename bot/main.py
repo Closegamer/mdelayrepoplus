@@ -13,7 +13,6 @@ STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
 STATE_WAIT_FIRST_PERIOD = "wait_first_period"
-STATE_WAIT_CONTACT = "wait_contact"
 DRAFT_MESSAGE_KEY = "draft_message_text"
 DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
@@ -61,8 +60,6 @@ def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
     buttons = [
         ["Написать новое сообщение"],
         ["Прочитать свои сообщения"],
-        ["Добавить контакт близкого человека"],
-        ["Просмотреть контакты близкого человека"],
     ]
     if is_architect_username(username):
         buttons.append(["Архитектор"])
@@ -185,7 +182,6 @@ async def send_emergency_now(
     username_text = f"@{user.username}" if user and user.username else "-"
     full_name = " ".join(x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x) or "Пользователь"
     created_text = format_api_datetime(recorded.get("timecreated"))
-    contact_text = fetch_user_contact_text(user.id if user else 0) or "-"
     mode_text = "РЕЖИМ: ТЕСТОВЫЙ (все периоды по 1 минуте)\n\n" if is_test_period_message(recorded) else ""
     alert_text = (
         "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
@@ -195,7 +191,6 @@ async def send_emergency_now(
         f"Username: {username_text}\n"
         f"Имя: {full_name}\n\n"
         f"Время создания сообщения: {created_text}\n\n"
-        f"Контакт близкого человека:\n{contact_text}\n\n"
         f"Текст сообщения:\n{recorded.get('message', '')}\n\n"
         f"Ответ пользователя:\n{response_text}"
     )
@@ -335,33 +330,6 @@ async def show_architect_summary(update: Update) -> None:
             reply_markup=main_menu_keyboard(username),
         )
 
-# Получение контакта близкого человека для пользователя
-def fetch_user_contact_text(user_id: int) -> str | None:
-    try:
-        response = api_get(f"/api/users/{user_id}/contact")
-        if response.status_code == 404:
-            return None
-        if not response.ok:
-            return None
-        data = response.json()
-        contact_text = (data.get("contact_text") or "").strip()
-        return contact_text or None
-    except Exception:
-        return None
-
-# Сохранение контакта близкого человека для пользователя
-def save_user_contact(user, contact_text: str) -> bool:
-    response = api_post(
-        f"/api/users/{user.id}/contact",
-        {
-            "contact_text": contact_text,
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-        },
-    )
-    return response.ok
-
 # Обработка текстовых сообщений пользователя
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
@@ -388,86 +356,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data[STATE_KEY] = STATE_IDLE
         await show_user_messages(update)
         return
-    if text == "Добавить контакт близкого человека":
-        context.user_data[STATE_KEY] = STATE_WAIT_CONTACT
-        if not user:
-            await update.message.reply_text(
-                "Не удалось определить пользователя.",
-                reply_markup=main_menu_keyboard(username),
-            )
-            return
-        current_contact = fetch_user_contact_text(user.id)
-        if current_contact:
-            await update.message.reply_text(
-                "Введите контакт близкого человека\n"
-                "Можно указать телефон или email в свободной форме\n\n"
-                f"Текущий контакт: {current_contact}",
-                reply_markup=flow_keyboard(),
-            )
-        else:
-            await update.message.reply_text(
-                "Введите контакт близкого человека\n"
-                "Можно указать телефон или email в свободной форме",
-                reply_markup=flow_keyboard(),
-            )
-        return
-    if text == "Просмотреть контакты близкого человека":
-        context.user_data[STATE_KEY] = STATE_IDLE
-        if not user:
-            await update.message.reply_text(
-                "Не удалось определить пользователя.",
-                reply_markup=main_menu_keyboard(username),
-            )
-            return
-        current_contact = fetch_user_contact_text(user.id)
-        if current_contact:
-            await update.message.reply_text(
-                "Контакт близкого человека:\n"
-                f"{current_contact}\n\n"
-                "Чтобы изменить контакт, нажмите кнопку\n"
-                "\"Добавить контакт близкого человека\"",
-                reply_markup=main_menu_keyboard(username),
-            )
-        else:
-            await update.message.reply_text(
-                "Контакт близкого человека пока не задан\n\n"
-                "Чтобы добавить контакт, нажмите кнопку\n"
-                "\"Добавить контакт близкого человека\"",
-                reply_markup=main_menu_keyboard(username),
-            )
-        return
-    if state == STATE_WAIT_CONTACT:
-        if not user:
-            await update.message.reply_text(
-                "Не удалось определить пользователя.",
-                reply_markup=main_menu_keyboard(username),
-            )
-            context.user_data[STATE_KEY] = STATE_IDLE
-            return
-        contact_text = text.strip()
-        if not contact_text:
-            await update.message.reply_text(
-                "Пустой контакт\nВведите телефон или email",
-                reply_markup=flow_keyboard(),
-            )
-            return
-        try:
-            if not save_user_contact(user, contact_text):
-                raise RuntimeError("contact save failed")
-            context.user_data[STATE_KEY] = STATE_IDLE
-            await update.message.reply_text(
-                f"Контакт сохранен\n{contact_text}",
-                reply_markup=main_menu_keyboard(username),
-            )
-            return
-        except Exception:
-            logger.exception("Failed to save user contact")
-            await update.message.reply_text(
-                "Не удалось сохранить контакт",
-                reply_markup=main_menu_keyboard(username),
-            )
-            context.user_data[STATE_KEY] = STATE_IDLE
-            return
     if state == STATE_IDLE:
         if is_ok_phrase:
             try:

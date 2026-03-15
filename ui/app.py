@@ -77,25 +77,6 @@ def api_delete(path: str):
     response = requests.delete(f"{API_BASE_URL}{path}", timeout=TIMEOUT_SECONDS)
     return response
 
-# Получение контакта близкого человека по пользователю
-def get_user_contact_text(user_id: int, cache: dict[int, str]) -> str:
-    if user_id in cache:
-        return cache[user_id]
-    try:
-        response = requests.get(f"{API_BASE_URL}/api/users/{user_id}/contact", timeout=TIMEOUT_SECONDS)
-        if response.status_code == 404:
-            cache[user_id] = "-"
-            return "-"
-        if not response.ok:
-            cache[user_id] = "-"
-            return "-"
-        contact_text = (response.json().get("contact_text") or "").strip()
-        cache[user_id] = contact_text or "-"
-        return cache[user_id]
-    except Exception:
-        cache[user_id] = "-"
-        return "-"
-
 # Инициализация состояния авторизации в сессии
 def ensure_auth_state() -> None:
     if "logged_in" not in st.session_state:
@@ -224,18 +205,14 @@ def format_first_request_time(item: dict) -> str:
 # Преобразование API записей в формат таблицы UI
 def map_table_rows(rows: list[dict]) -> list[dict]:
     mapped = []
-    contact_cache: dict[int, str] = {}
     for item in rows:
         tracking = row_tracking_status(item)
         result = row_result_status(item)
-        user_id = int(item.get("user_id") or 0)
-        contact_text = get_user_contact_text(user_id, contact_cache) if user_id else "-"
         mapped.append(
             {
                 "ID": item.get("id"),
                 "UserID": item.get("user_id"),
                 "Username": item.get("username") or "-",
-                "Контакт близкого человека": contact_text,
                 "Режим": item.get("message_mode") or "Реальный",
                 "Сообщение": shorten_message(item.get("message") or ""),
                 "Создано": format_created_at(item.get("timecreated")),
