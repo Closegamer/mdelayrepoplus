@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from pathlib import Path
 from datetime import datetime, timezone
 import requests
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
@@ -9,6 +10,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
 ARCHITECT_USERNAME = "closegamer"
+MENTOR_USERNAME = "closegamer"
 STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
@@ -55,6 +57,15 @@ def api_delete(path: str, params: dict | None = None) -> requests.Response:
 def is_architect_username(username: str | None) -> bool:
     return bool(username and username.lower() == ARCHITECT_USERNAME)
 
+# Проверка доступа к кнопке наставника
+def is_nastavnik_username(username: str | None) -> bool:
+    return bool(username and username.lower() == MENTOR_USERNAME)
+
+# Чтение содержимого README файла
+def read_readme_text() -> str:
+    readme_path = Path(__file__).resolve().parents[1] / "README.md"
+    return readme_path.read_text(encoding="utf-8")
+
 # Возврат клавиатуры главного меню
 def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
     buttons = [
@@ -63,6 +74,8 @@ def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
     ]
     if is_architect_username(username):
         buttons.append(["Архитектор"])
+    if is_nastavnik_username(username):
+        buttons.append(["Наставник"])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 # Возврат клавиатуры для шага ввода
@@ -330,6 +343,30 @@ async def show_architect_summary(update: Update) -> None:
             reply_markup=main_menu_keyboard(username),
         )
 
+# Показ содержимого README для наставника
+async def show_nastavnik_readme(update: Update) -> None:
+    user = update.effective_user
+    username = user.username if user else None
+    if not is_nastavnik_username(username):
+        await update.message.reply_text(
+            "Команда недоступна",
+            reply_markup=main_menu_keyboard(username),
+        )
+        return
+    try:
+        readme_text = read_readme_text()
+        await update.message.reply_text(
+            "Здравствуйте, Руслан\nОтправляю содержимое README",
+            reply_markup=main_menu_keyboard(username),
+        )
+        await update.message.reply_text(readme_text, reply_markup=main_menu_keyboard(username))
+    except Exception:
+        logger.exception("Failed to send nastavnik readme")
+        await update.message.reply_text(
+            "Не удалось прочитать README",
+            reply_markup=main_menu_keyboard(username),
+        )
+
 # Обработка текстовых сообщений пользователя
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
@@ -346,6 +383,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == "Архитектор":
         context.user_data[STATE_KEY] = STATE_IDLE
         await show_architect_summary(update)
+        return
+    if text == "Наставник":
+        context.user_data[STATE_KEY] = STATE_IDLE
+        await show_nastavnik_readme(update)
         return
     if text == "Написать новое сообщение":
         context.user_data[STATE_KEY] = STATE_WAIT_MESSAGE
