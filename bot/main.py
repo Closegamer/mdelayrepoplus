@@ -62,6 +62,7 @@ def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
         ["Написать новое сообщение"],
         ["Прочитать свои сообщения"],
         ["Добавить контакт близкого человека"],
+        ["Просмотреть контакты близкого человека"],
     ]
     if is_architect_username(username):
         buttons.append(["Архитектор"])
@@ -408,6 +409,31 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 "Введите контакт близкого человека\n"
                 "Можно указать телефон или email в свободной форме",
                 reply_markup=flow_keyboard(),
+            )
+        return
+    if text == "Просмотреть контакты близкого человека":
+        context.user_data[STATE_KEY] = STATE_IDLE
+        if not user:
+            await update.message.reply_text(
+                "Не удалось определить пользователя.",
+                reply_markup=main_menu_keyboard(username),
+            )
+            return
+        current_contact = fetch_user_contact_text(user.id)
+        if current_contact:
+            await update.message.reply_text(
+                "Контакт близкого человека:\n"
+                f"{current_contact}\n\n"
+                "Чтобы изменить контакт, нажмите кнопку\n"
+                "\"Добавить контакт близкого человека\"",
+                reply_markup=main_menu_keyboard(username),
+            )
+        else:
+            await update.message.reply_text(
+                "Контакт близкого человека пока не задан\n\n"
+                "Чтобы добавить контакт, нажмите кнопку\n"
+                "\"Добавить контакт близкого человека\"",
+                reply_markup=main_menu_keyboard(username),
             )
         return
     if state == STATE_WAIT_CONTACT:
