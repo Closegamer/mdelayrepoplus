@@ -10,7 +10,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler, Cont
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
 ARCHITECT_USERNAME = "closegamer"
-MENTOR_USERNAME = "closegamer"
+MENTOR_USERNAME = "kayumovru"
 STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
