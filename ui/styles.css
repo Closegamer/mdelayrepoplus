@@ -1,0 +1,39 @@
+[data-testid="stSidebar"] {
+    display: none;
+}
+[data-testid="collapsedControl"] {
+    display: none;
+}
+.kpi-card {
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1px solid #2a313b;
+    background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
+    margin-bottom: 8px;
+}
+.kpi-card.default {
+    border-left: 4px solid #3b82f6;
+}
+.kpi-card.success {
+    border-left: 4px solid #10b981;
+}
+.kpi-card.warn {
+    border-left: 4px solid #f59e0b;
+}
+.kpi-card.danger {
+    border-left: 4px solid #ef4444;
+}
+.kpi-label {
+    font-size: 13px;
+    color: #b7c0cd;
+    margin-bottom: 6px;
+}
+.kpi-value {
+    font-size: 30px;
+    line-height: 1;
+    font-weight: 700;
+    color: #e8eef7;
+}
+div[data-testid="stForm"] {
+    text-align: center;
+}

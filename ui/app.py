@@ -2,6 +2,7 @@ import os
 import hashlib
 import hmac
 import time
+from pathlib import Path
 from datetime import datetime, timedelta
 import requests
 import streamlit as st
@@ -34,37 +35,8 @@ def is_login_token_valid(password: str, token: str) -> bool:
 
 # Подключение глобальных стилей страницы
 def inject_global_styles() -> None:
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebar"] {display: none;}
-        [data-testid="collapsedControl"] {display: none;}
-        .kpi-card {
-            border-radius: 12px;
-            padding: 12px 14px;
-            border: 1px solid #2a313b;
-            background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
-            margin-bottom: 8px;
-        }
-        .kpi-card.default {border-left: 4px solid #3b82f6;}
-        .kpi-card.success {border-left: 4px solid #10b981;}
-        .kpi-card.warn {border-left: 4px solid #f59e0b;}
-        .kpi-card.danger {border-left: 4px solid #ef4444;}
-        .kpi-label {
-            font-size: 13px;
-            color: #b7c0cd;
-            margin-bottom: 6px;
-        }
-        .kpi-value {
-            font-size: 30px;
-            line-height: 1;
-            font-weight: 700;
-            color: #e8eef7;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    css = Path(__file__).with_name("styles.css").read_text(encoding="utf-8")
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
 # Выполнение GET запроса к API и возврат JSON
 def api_get(path: str, params: dict | None = None):
@@ -90,16 +62,6 @@ def ensure_auth_state() -> None:
 
 # Рендер формы входа в админку
 def render_login() -> bool:
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stForm"] {
-            text-align: center;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     top_spacer, _, _ = st.columns([1, 1, 1])
     with top_spacer:
         st.write("")
@@ -110,7 +72,7 @@ def render_login() -> bool:
             st.text_input(
                 "Пароль администратора",
                 type="password",
-                placeholder="Стой, кто идет?",
+                placeholder="Стой, кто идет? Нужен пароль!",
                 label_visibility="collapsed",
                 key="admin_password_input",
             )
@@ -336,7 +298,7 @@ def render_footer() -> None:
 
 # Точка входа Streamlit приложения
 def main() -> None:
-    st.set_page_config(page_title="mDelayPlusBot Admin", layout="wide")
+    st.set_page_config(page_title="mDelayPlusBot Adminka", layout="wide")
     inject_global_styles()
     ensure_auth_state()
     if not st.session_state.logged_in:

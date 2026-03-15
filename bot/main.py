@@ -336,6 +336,8 @@ async def show_architect_summary(update: Update) -> None:
             build_architect_summary(response.json()),
             reply_markup=main_menu_keyboard(username),
         )
+        readme_text = read_readme_text()
+        await update.message.reply_text(readme_text, reply_markup=main_menu_keyboard(username))
     except Exception:
         logger.exception("Failed to load architect summary")
         await update.message.reply_text(
@@ -356,7 +358,7 @@ async def show_nastavnik_readme(update: Update) -> None:
     try:
         readme_text = read_readme_text()
         await update.message.reply_text(
-            "Здравствуйте, Руслан\nОтправляю содержимое README",
+            "Здравствуйте, Руслан!\n\nОтправляю содержимое README-файла.",
             reply_markup=main_menu_keyboard(username),
         )
         await update.message.reply_text(readme_text, reply_markup=main_menu_keyboard(username))
