@@ -7,6 +7,7 @@ from app.config import settings
 from app.models import Message
 
 OK_TEXT = "Я в порядке"
+OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
 SENT_TEXT = "SENT"
 ESCALATED_TEXT = "ESCALATED"
 
@@ -17,7 +18,11 @@ EscalationSender = Callable[[Message], bool]
 def _normalize_ok_text(value: str) -> str:
     lowered = value.strip().lower().replace("ё", "е")
     lowered = re.sub(r"\s+", " ", lowered)
-    return lowered.strip(" .,!?:;")
+    lowered = lowered.strip(" .,!?:;\"'`~+-=_()[]{}<>")
+    # Убираем эмодзи и прочие символы, чтобы не было ложных эскалаций
+    lowered = re.sub(r"[^a-zа-я0-9\s]", "", lowered)
+    lowered = re.sub(r"\s+", " ", lowered)
+    return lowered.strip()
 
 # Создание нового сообщения для отслеживания
 def create_message(
@@ -79,7 +84,7 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
     if not pending:
         return None
     answer = response_text.strip()
-    is_ok = _normalize_ok_text(answer) == _normalize_ok_text(OK_TEXT)
+    is_ok = _normalize_ok_text(answer) in OK_NORMALIZED_VARIANTS
     value = OK_TEXT if is_ok else answer
     pending.user_response_text = answer
     active_check_no = 0
