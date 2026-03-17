@@ -278,9 +278,11 @@ def get_admin_overview(db: Session) -> dict:
     total_users = db.query(func.count(func.distinct(Message.userid))).scalar() or 0
     total_alerts = db.query(func.count(Message.id)).filter(Message.check3_res == ESCALATED_TEXT).scalar() or 0
     active_checks = db.query(func.count(Message.id)).filter(_active_condition()).scalar() or 0
-    check1_sent = db.query(func.count(Message.id)).filter(Message.check1_res == SENT_TEXT).scalar() or 0
-    check2_sent = db.query(func.count(Message.id)).filter(Message.check2_res == SENT_TEXT).scalar() or 0
-    check3_sent = db.query(func.count(Message.id)).filter(Message.check3_res == SENT_TEXT).scalar() or 0
+    # Количество отправленных проверок считаем по факту отправки (наличие времени),
+    # а не по текущему статусу ответа, который может измениться позже.
+    check1_sent = db.query(func.count(Message.id)).filter(Message.check1_time.is_not(None)).scalar() or 0
+    check2_sent = db.query(func.count(Message.id)).filter(Message.check2_time.is_not(None)).scalar() or 0
+    check3_sent = db.query(func.count(Message.id)).filter(Message.check3_time.is_not(None)).scalar() or 0
     return {
         "total_messages": int(total_messages),
         "total_users": int(total_users),
