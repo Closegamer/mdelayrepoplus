@@ -140,7 +140,7 @@ def format_check_response(item: dict, check_no: int) -> str:
     if not value or value == "SENT":
         return "-"
     if value == "ESCALATED":
-        return "Тревога"
+        return "-"
     return value
 
 # Вычисление времени первого запроса
