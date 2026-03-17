@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import inspect
+from html import escape
 from pathlib import Path
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -59,8 +60,9 @@ OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явп
 
 # Формирование приветственного текста для команды /start
 def start_text(first_name: str) -> str:
+    safe_first_name = escape(first_name)
     return (
-        f"Здравствуйте, {first_name}! Вас приветствует бот KakDelaTorBot!\n\n"
+        f"Здравствуйте, {safe_first_name}! Вас приветствует бот KakDelaTorBot!\n\n"
         "Если Вы собираетесь в опасное путешествие или в подозрительное место, "
         "Вы можете оставить сообщение, которое поможет Вас найти в случае непредвиденной ситуации "
         "или при отсутствии у Вас связи.\n\n"
@@ -69,8 +71,8 @@ def start_text(first_name: str) -> str:
         "Если Вы ответите что-то другое, бот сразу передаст сообщение службе спасения.\n\n"
         "Если Вы не ответите на все три запроса, бот передаст исходное сообщение службе спасения.\n\n"
         "Удачи Вам! Не теряйтесь - кому-то может быть без Вас грустно!\n\n"
-        "Начиная использовать бота, Вы соглашаетесь с Политикой конфиденциальности:\n"
-        "/privacy\n\n"
+        "Начиная использовать бота, Вы соглашаетесь с "
+        "<a href=\"tg://msg_url?text=/privacy\">Политикой конфиденциальности</a>.\n\n"
     )
 
 # Выполнение GET запроса к API
@@ -297,6 +299,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         start_text(first_name),
         reply_markup=main_menu_keyboard(user.username if user else None),
+        parse_mode="HTML",
     )
 
 # Отправка текста политики конфиденциальности
