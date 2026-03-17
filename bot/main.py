@@ -57,6 +57,22 @@ DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
 OK_CANONICAL_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
+LATIN_TO_CYRILLIC_SIMILAR = str.maketrans(
+    {
+        "a": "а",
+        "e": "е",
+        "o": "о",
+        "p": "р",
+        "c": "с",
+        "y": "у",
+        "x": "х",
+        "k": "к",
+        "m": "м",
+        "t": "т",
+        "b": "в",
+        "h": "н",
+    }
+)
 
 # Формирование приветственного текста для команды /start
 def start_text(first_name: str) -> str:
@@ -204,13 +220,21 @@ def format_api_datetime(value: str | None) -> str:
 # Нормализация текста ответа пользователя
 def normalize_ok_input(value: str) -> str:
     normalized = value.strip().lower().replace("ё", "е")
+    normalized = normalized.translate(LATIN_TO_CYRILLIC_SIMILAR)
     normalized = re.sub(r"\s+", " ", normalized)
     normalized = normalized.strip(" .,!?:;\"'`~+-=_()[]{}<>")
+    normalized = re.sub(r"[^a-zа-я0-9\s]", "", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
     return normalized
 
 # Проверка эквивалентности ответа фразе Я в порядке
 def is_ok_text(value: str) -> bool:
-    return normalize_ok_input(value) in OK_NORMALIZED_VARIANTS
+    normalized = normalize_ok_input(value)
+    if normalized in OK_NORMALIZED_VARIANTS:
+        return True
+    if normalized.startswith("я в порядке"):
+        return True
+    return normalized.replace(" ", "") in OK_NORMALIZED_VARIANTS
 
 # Определение создания сообщения в тестовом режиме
 def is_test_period_message(recorded: dict) -> bool:

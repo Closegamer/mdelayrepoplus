@@ -10,6 +10,22 @@ OK_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
 SENT_TEXT = "SENT"
 ESCALATED_TEXT = "ESCALATED"
+LATIN_TO_CYRILLIC_SIMILAR = str.maketrans(
+    {
+        "a": "а",
+        "e": "е",
+        "o": "о",
+        "p": "р",
+        "c": "с",
+        "y": "у",
+        "x": "х",
+        "k": "к",
+        "m": "м",
+        "t": "т",
+        "b": "в",
+        "h": "н",
+    }
+)
 
 CheckSender = Callable[[Message, int], bool]
 EscalationSender = Callable[[Message], bool]
@@ -17,12 +33,23 @@ EscalationSender = Callable[[Message], bool]
 # Нормализация текста для сравнения фразы подтверждения
 def _normalize_ok_text(value: str) -> str:
     lowered = value.strip().lower().replace("ё", "е")
+    lowered = lowered.translate(LATIN_TO_CYRILLIC_SIMILAR)
     lowered = re.sub(r"\s+", " ", lowered)
     lowered = lowered.strip(" .,!?:;\"'`~+-=_()[]{}<>")
     # Убираем эмодзи и прочие символы, чтобы не было ложных эскалаций
     lowered = re.sub(r"[^a-zа-я0-9\s]", "", lowered)
     lowered = re.sub(r"\s+", " ", lowered)
     return lowered.strip()
+
+# Проверка, что ответ эквивалентен фразе Я в порядке
+def _is_ok_response(value: str) -> bool:
+    normalized = _normalize_ok_text(value)
+    if normalized in OK_NORMALIZED_VARIANTS:
+        return True
+    if normalized.startswith("я в порядке"):
+        return True
+    compacted = normalized.replace(" ", "")
+    return compacted in OK_NORMALIZED_VARIANTS
 
 # Создание нового сообщения для отслеживания
 def create_message(
@@ -84,7 +111,7 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
     if not pending:
         return None
     answer = response_text.strip()
-    is_ok = _normalize_ok_text(answer) in OK_NORMALIZED_VARIANTS
+    is_ok = _is_ok_response(answer)
     value = OK_TEXT if is_ok else answer
     pending.user_response_text = answer
     active_check_no = 0
