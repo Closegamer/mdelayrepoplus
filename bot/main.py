@@ -87,8 +87,8 @@ def start_text(first_name: str) -> str:
         "Если Вы ответите что-то другое, бот сразу передаст сообщение службе спасения.\n\n"
         "Если Вы не ответите на все три запроса, бот передаст исходное сообщение службе спасения.\n\n"
         "Удачи Вам! Не теряйтесь - кому-то может быть без Вас грустно!\n\n"
-        "Начиная использовать бота, Вы соглашаетесь с "
-        "<a href=\"tg://msg_url?text=/privacy\">Политикой конфиденциальности</a>.\n\n"
+        "Начиная использовать бота, Вы соглашаетесь с Политикой конфиденциальности.\n"
+        "Открыть ее можно соответствующей кнопкой в меню.\n\n"
     )
 
 # Выполнение GET запроса к API
@@ -126,6 +126,7 @@ def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
     buttons = [
         ["Написать новое сообщение"],
         ["Прочитать свои сообщения"],
+        ["Политика конфиденциальности"],
     ]
     if is_architect_username(username):
         buttons.append(["Архитектор"])
@@ -323,7 +324,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         start_text(first_name),
         reply_markup=main_menu_keyboard(user.username if user else None),
-        parse_mode="HTML",
     )
 
 # Отправка текста политики конфиденциальности
@@ -470,6 +470,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == "Прочитать свои сообщения":
         context.user_data[STATE_KEY] = STATE_IDLE
         await show_user_messages(update)
+        return
+    if text == "Политика конфиденциальности":
+        context.user_data[STATE_KEY] = STATE_IDLE
+        await privacy(update, context)
         return
     if state == STATE_IDLE:
         if is_ok_phrase:
