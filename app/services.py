@@ -249,7 +249,12 @@ def list_recent_messages(db: Session, limit: int, offset: int) -> list[Message]:
 def list_alert_messages(db: Session, limit: int, offset: int) -> list[Message]:
     return (
         db.query(Message)
-        .filter(Message.check3_res == ESCALATED_TEXT)
+        .filter(
+            Message.check3_res == ESCALATED_TEXT,
+            or_(Message.check1_res.is_(None), Message.check1_res != OK_TEXT),
+            or_(Message.check2_res.is_(None), Message.check2_res != OK_TEXT),
+            or_(Message.check3_res.is_(None), Message.check3_res != OK_TEXT),
+        )
         .order_by(Message.id.desc())
         .offset(offset)
         .limit(limit)

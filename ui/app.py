@@ -140,11 +140,6 @@ def format_check_response(item: dict, check_no: int) -> str:
     if not value or value == "SENT":
         return "-"
     if value == "ESCALATED":
-        if check_no == 3:
-            response_text = (item.get("user_response_text") or "").strip()
-            if response_text:
-                return response_text
-            return "-"
         return "Тревога"
     return value
 
