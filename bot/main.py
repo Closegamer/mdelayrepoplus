@@ -69,6 +69,8 @@ def start_text(first_name: str) -> str:
         "Если Вы ответите что-то другое, бот сразу передаст сообщение службе спасения.\n\n"
         "Если Вы не ответите на все три запроса, бот передаст исходное сообщение службе спасения.\n\n"
         "Удачи Вам! Не теряйтесь - кому-то может быть без Вас грустно!\n\n"
+        "Начиная использовать бота, Вы соглашаетесь с Политикой конфиденциальности:\n"
+        "/privacy\n\n"
     )
 
 # Выполнение GET запроса к API
@@ -95,6 +97,11 @@ def is_nastavnik_username(username: str | None) -> bool:
 def read_readme_text() -> str:
     readme_path = Path(__file__).resolve().parents[1] / "README.md"
     return readme_path.read_text(encoding="utf-8")
+
+# Чтение текста политики конфиденциальности
+def read_privacy_policy_text() -> str:
+    policy_path = Path(__file__).resolve().parents[1] / "PRIVACY_POLICY.md"
+    return policy_path.read_text(encoding="utf-8")
 
 # Возврат клавиатуры главного меню
 def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
@@ -289,6 +296,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     first_name = (user.first_name if user else None) or "<Ваше имя не распознано>"
     await update.message.reply_text(
         start_text(first_name),
+        reply_markup=main_menu_keyboard(user.username if user else None),
+    )
+
+# Отправка текста политики конфиденциальности
+async def privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.effective_user
+    await update.message.reply_text(
+        read_privacy_policy_text(),
         reply_markup=main_menu_keyboard(user.username if user else None),
     )
 
@@ -592,7 +607,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def setup_bot_commands(application: Application) -> None:
     try:
         await application.bot.delete_webhook(drop_pending_updates=False)
-        await application.bot.set_my_commands([BotCommand("start", "Главное меню")])
+        await application.bot.set_my_commands([
+            BotCommand("start", "Главное меню"),
+            BotCommand("privacy", "Политика конфиденциальности"),
+        ])
     except Exception:
         logger.exception("Failed to initialize bot commands")
 
@@ -603,6 +621,7 @@ def main() -> None:
         raise RuntimeError("BOT_TOKEN is not set")
     app = Application.builder().token(token).post_init(setup_bot_commands).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("privacy", privacy))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     logger.info("Bot is starting long polling...")
