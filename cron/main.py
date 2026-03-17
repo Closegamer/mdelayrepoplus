@@ -48,7 +48,12 @@ def _send_escalation(row) -> bool:
         return False
     username_text = f"@{escape(str(row.username))}" if row.username else "-"
     user_title = " ".join(x for x in [row.firstname, row.lastname] if x) or "Пользователь"
-    created_text = escape(str(row.timecreated))
+    timezone_name = (getattr(row, "user_timezone", None) or "UTC").strip() or "UTC"
+    created_local = getattr(row, "timecreated_local", None)
+    if created_local is not None:
+        created_text = escape(f"{created_local} ({timezone_name})")
+    else:
+        created_text = escape(f"{row.timecreated} ({timezone_name})")
     source_message = escape(str(row.message or ""))
     is_test_mode = row.message_mode == "Тестовый" or (
         int(getattr(row, "check1_delay_seconds", 0) or 0) == 60

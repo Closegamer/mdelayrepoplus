@@ -12,9 +12,11 @@ class Message(Base):
     lastname: Mapped[str | None] = mapped_column(Text, nullable=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     message_mode: Mapped[str] = mapped_column(Text, nullable=False, default="Реальный", server_default="Реальный")
+    user_timezone: Mapped[str] = mapped_column(Text, nullable=False, default="UTC", server_default="UTC")
     timecreated: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+    timecreated_local: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     check1_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     check1_res: Mapped[str | None] = mapped_column(Text, nullable=True)
     check1_is_text: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import re
 from typing import Callable
+from zoneinfo import ZoneInfo
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
@@ -28,10 +29,23 @@ def create_message(
     last_name: str | None,
     message_text: str,
     message_mode: str | None = None,
+    user_timezone: str | None = None,
+    timecreated_utc: datetime | None = None,
     check1_delay_seconds: int | None = None,
     check2_delay_seconds: int | None = None,
     check3_delay_seconds: int | None = None,
 ) -> Message:
+    timezone_name = (user_timezone or "UTC").strip() or "UTC"
+    try:
+        tz = ZoneInfo(timezone_name)
+    except Exception:
+        timezone_name = "UTC"
+        tz = ZoneInfo("UTC")
+    created_utc = timecreated_utc or datetime.now(timezone.utc)
+    if created_utc.tzinfo is None:
+        created_utc = created_utc.replace(tzinfo=timezone.utc)
+    else:
+        created_utc = created_utc.astimezone(timezone.utc)
     obj = Message(
         userid=user_id,
         username=username,
@@ -39,6 +53,9 @@ def create_message(
         lastname=last_name,
         message=message_text,
         message_mode=message_mode or "Реальный",
+        user_timezone=timezone_name,
+        timecreated=created_utc,
+        timecreated_local=created_utc.astimezone(tz).replace(tzinfo=None),
         check1_delay_seconds=check1_delay_seconds or settings.check1_seconds,
         check2_delay_seconds=check2_delay_seconds or settings.check2_seconds,
         check3_delay_seconds=check3_delay_seconds or settings.check3_seconds,

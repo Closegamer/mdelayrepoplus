@@ -8,6 +8,8 @@ class MessageCreate(BaseModel):
     last_name: str | None = None
     message: str = Field(min_length=1)
     message_mode: str | None = None
+    user_timezone: str | None = None
+    timecreated_utc: datetime | None = None
     check1_delay_seconds: int | None = Field(default=None, ge=60)
     check2_delay_seconds: int | None = Field(default=None, ge=60)
     check3_delay_seconds: int | None = Field(default=None, ge=60)
@@ -24,7 +26,9 @@ class MessageOut(BaseModel):
     last_name: str | None
     message: str
     message_mode: str
+    user_timezone: str
     timecreated: datetime
+    timecreated_local: datetime | None
     check1_time: datetime | None
     check1_res: str | None
     check1_is_text: bool
