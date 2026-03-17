@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import inspect
 from pathlib import Path
 from datetime import datetime, timezone
 import requests
@@ -603,14 +604,26 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     logger.info("Bot is starting long polling...")
+    polling_kwargs = {
+        "drop_pending_updates": True,
+        "allowed_updates": Update.ALL_TYPES,
+        "poll_interval": POLLING_INTERVAL_SECONDS,
+        "timeout": POLLING_TIMEOUT_SECONDS,
+    }
+    # Совместимость с разными версиями python-telegram-bot:
+    # передаем дополнительные timeout-параметры только если они поддерживаются.
+    optional_polling_kwargs = {
+        "read_timeout": POLLING_READ_TIMEOUT_SECONDS,
+        "connect_timeout": POLLING_CONNECT_TIMEOUT_SECONDS,
+        "pool_timeout": POLLING_POOL_TIMEOUT_SECONDS,
+    }
+    supported_polling_params = set(inspect.signature(app.run_polling).parameters)
+    for key, value in optional_polling_kwargs.items():
+        if key in supported_polling_params:
+            polling_kwargs[key] = value
+
     app.run_polling(
-        drop_pending_updates=True,
-        allowed_updates=Update.ALL_TYPES,
-        poll_interval=POLLING_INTERVAL_SECONDS,
-        timeout=POLLING_TIMEOUT_SECONDS,
-        read_timeout=POLLING_READ_TIMEOUT_SECONDS,
-        connect_timeout=POLLING_CONNECT_TIMEOUT_SECONDS,
-        pool_timeout=POLLING_POOL_TIMEOUT_SECONDS,
+        **polling_kwargs,
     )
 
 if __name__ == "__main__":
