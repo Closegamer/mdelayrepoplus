@@ -1,8 +1,8 @@
 import os
 
 class Settings:
-    postgres_db: str = os.getenv("POSTGRES_DB", "mdelayrepoplus")
-    postgres_user: str = os.getenv("POSTGRES_USER", "mdelayrepouser")
+    postgres_db: str = os.getenv("POSTGRES_DB", "kakdelatorbot")
+    postgres_user: str = os.getenv("POSTGRES_USER", "kakdelatoruser")
     postgres_password: str = os.getenv("POSTGRES_PASSWORD", "")
     postgres_host: str = os.getenv("POSTGRES_HOST", "db")
     postgres_port: int = int(os.getenv("POSTGRES_PORT", "5432"))

@@ -262,7 +262,7 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
 def render_header() -> None:
     left, right = st.columns([9, 1], vertical_alignment="top")
     with left:
-        st.title("mDelayPlusBot - Центр мониторинга и управления")
+        st.title("KakDelaTorBot - Центр мониторинга и управления")
     with right:
         if st.button("Выйти", use_container_width=True):
             st.session_state.logged_in = False
@@ -298,7 +298,7 @@ def render_footer() -> None:
 
 # Точка входа Streamlit приложения
 def main() -> None:
-    st.set_page_config(page_title="mDelayPlusBot Adminka", layout="wide")
+    st.set_page_config(page_title="KakDelaTorBot Adminka", layout="wide")
     inject_global_styles()
     ensure_auth_state()
     if not st.session_state.logged_in:

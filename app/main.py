@@ -24,7 +24,7 @@ from app.services import (
     submit_response,
 )
 
-app = FastAPI(title="mDelayPlusBot API", version="0.1.0")
+app = FastAPI(title="KakDelaTorBot API", version="0.1.0")
 
 # Открытие и закрытие сессии БД для запроса
 def get_db():

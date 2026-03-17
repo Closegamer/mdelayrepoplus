@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: mdelayrepoplus-postgres
+    container_name: kakdelatorbot-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -16,7 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mdelayrepoplus-api
+    container_name: kakdelatorbot-api
     restart: unless-stopped
     env_file:
       - .env
@@ -31,7 +31,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mdelayrepoplus-bot
+    container_name: kakdelatorbot-bot
     restart: unless-stopped
     env_file:
       - .env
@@ -44,7 +44,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mdelayrepoplus-cron
+    container_name: kakdelatorbot-cron
     restart: unless-stopped
     env_file:
       - .env
@@ -58,7 +58,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mdelayrepoplus-ui
+    container_name: kakdelatorbot-ui
     restart: unless-stopped
     env_file:
       - .env
