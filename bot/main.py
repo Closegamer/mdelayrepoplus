@@ -7,8 +7,41 @@ import requests
 from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
+logging.basicConfig(
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
+
+# Безопасное чтение числовых переменных окружения для конфигурации polling
+def get_env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning("Invalid integer value for %s=%r, fallback to %s", name, raw, default)
+        return default
+
+# Безопасное чтение float переменных окружения
+def get_env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Invalid float value for %s=%r, fallback to %s", name, raw, default)
+        return default
+
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
+POLLING_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_TIMEOUT_SECONDS", 30)
+POLLING_READ_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_READ_TIMEOUT_SECONDS", 35)
+POLLING_CONNECT_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_CONNECT_TIMEOUT_SECONDS", 10)
+POLLING_POOL_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_POOL_TIMEOUT_SECONDS", 10)
+POLLING_INTERVAL_SECONDS = get_env_float("BOT_POLLING_INTERVAL_SECONDS", 1.0)
 ARCHITECT_USERNAME = "closegamer"
 MENTOR_USERNAME = "kayumovru"
 STATE_KEY = "state"
@@ -20,12 +53,6 @@ DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
 OK_CANONICAL_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
-
-logging.basicConfig(
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
 
 # Формирование приветственного текста для команды /start
 def start_text(first_name: str) -> str:
@@ -561,9 +588,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # Регистрация команд бота в меню Telegram
 async def setup_bot_commands(application: Application) -> None:
     try:
+        await application.bot.delete_webhook(drop_pending_updates=False)
         await application.bot.set_my_commands([BotCommand("start", "Главное меню")])
     except Exception:
-        logger.exception("Failed to set bot commands")
+        logger.exception("Failed to initialize bot commands")
 
 # Точка входа для запуска Telegram бота
 def main() -> None:
@@ -574,8 +602,16 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    logger.info("Bot is starting polling...")
-    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    logger.info("Bot is starting long polling...")
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES,
+        poll_interval=POLLING_INTERVAL_SECONDS,
+        timeout=POLLING_TIMEOUT_SECONDS,
+        read_timeout=POLLING_READ_TIMEOUT_SECONDS,
+        connect_timeout=POLLING_CONNECT_TIMEOUT_SECONDS,
+        pool_timeout=POLLING_POOL_TIMEOUT_SECONDS,
+    )
 
 if __name__ == "__main__":
     main()
