@@ -46,16 +46,6 @@ def startup() -> None:
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check2_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check3_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS user_response_text TEXT"))
-        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS user_timezone TEXT NOT NULL DEFAULT 'UTC'"))
-        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS timecreated_local TIMESTAMP"))
-        conn.execute(text("UPDATE messages SET user_timezone = 'UTC' WHERE user_timezone IS NULL OR user_timezone = ''"))
-        conn.execute(
-            text(
-                "UPDATE messages "
-                "SET timecreated_local = timezone(COALESCE(NULLIF(user_timezone, ''), 'UTC'), timecreated) "
-                "WHERE timecreated_local IS NULL AND timecreated IS NOT NULL"
-            )
-        )
 
 @app.get("/health", response_model=HealthOut)
 
@@ -73,9 +63,7 @@ def _to_out(item: Message) -> MessageOut:
         last_name=item.lastname,
         message=item.message,
         message_mode=item.message_mode,
-        user_timezone=item.user_timezone,
         timecreated=item.timecreated,
-        timecreated_local=item.timecreated_local,
         check1_time=item.check1_time,
         check1_res=item.check1_res,
         check1_is_text=item.check1_is_text,
@@ -103,8 +91,6 @@ def create_message_endpoint(payload: MessageCreate, db: Session = Depends(get_db
         last_name=payload.last_name,
         message_text=payload.message,
         message_mode=payload.message_mode,
-        user_timezone=payload.user_timezone,
-        timecreated_utc=payload.timecreated_utc,
         check1_delay_seconds=payload.check1_delay_seconds,
         check2_delay_seconds=payload.check2_delay_seconds,
         check3_delay_seconds=payload.check3_delay_seconds,

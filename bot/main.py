@@ -39,7 +39,7 @@ def get_env_float(name: str, default: float) -> float:
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 ALERT_CHAT_ID = os.getenv("ALERT_CHAT_ID", "")
-DEFAULT_USER_TIMEZONE = os.getenv("DEFAULT_USER_TIMEZONE", "UTC")
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 POLLING_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_TIMEOUT_SECONDS", 30)
 POLLING_READ_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_READ_TIMEOUT_SECONDS", 35)
 POLLING_CONNECT_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_CONNECT_TIMEOUT_SECONDS", 10)
@@ -180,14 +180,9 @@ def message_result_status(item: dict) -> str:
     return "-"
 
 # Форматирование даты из API в локальный вид
-def format_api_datetime(value: str | None, timezone_name: str | None = None) -> str:
+def format_api_datetime(value: str | None) -> str:
     if not value:
         return "-"
-    tz_name = (timezone_name or DEFAULT_USER_TIMEZONE).strip() or "UTC"
-    try:
-        target_tz = ZoneInfo(tz_name)
-    except Exception:
-        target_tz = ZoneInfo("UTC")
     raw = value.replace("Z", "+00:00")
     try:
         dt = datetime.fromisoformat(raw)
@@ -195,22 +190,7 @@ def format_api_datetime(value: str | None, timezone_name: str | None = None) -> 
         return value
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(target_tz).strftime("%d.%m.%Y %H:%M:%S")
-
-# Форматирование локального времени и подписи часового пояса
-def format_created_local_with_timezone(item: dict) -> str:
-    timezone_name = (item.get("user_timezone") or DEFAULT_USER_TIMEZONE or "UTC").strip() or "UTC"
-    local_value = item.get("timecreated_local")
-    if local_value:
-        raw = str(local_value).replace("Z", "+00:00")
-        try:
-            dt = datetime.fromisoformat(raw)
-            if dt.tzinfo is not None:
-                dt = dt.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-            return f"{dt.strftime('%d.%m.%Y %H:%M:%S')} ({timezone_name})"
-        except ValueError:
-            return f"{local_value} ({timezone_name})"
-    return f"{format_api_datetime(item.get('timecreated'), timezone_name)} ({timezone_name})"
+    return dt.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M:%S")
 
 # Нормализация текста ответа пользователя
 def normalize_ok_input(value: str) -> str:
@@ -244,7 +224,7 @@ async def send_emergency_now(
         raise RuntimeError("ALERT_CHAT_ID is not set")
     username_text = f"@{user.username}" if user and user.username else "-"
     full_name = " ".join(x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x) or "Пользователь"
-    created_text = format_created_local_with_timezone(recorded)
+    created_text = format_api_datetime(recorded.get("timecreated"))
     mode_text = "РЕЖИМ: ТЕСТОВЫЙ (все периоды по 1 минуте)\n\n" if is_test_period_message(recorded) else ""
     alert_text = (
         "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
@@ -273,7 +253,7 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
     if not submit_response_call.ok:
         raise RuntimeError(f"response submit status {submit_response_call.status_code}")
     recorded = submit_response_call.json()
-    created_text = format_created_local_with_timezone(recorded)
+    created_text = format_api_datetime(recorded.get("timecreated"))
     if recorded.get("check3_res") == "ESCALATED":
         try:
             await send_emergency_now(context, user, recorded, text)
@@ -338,7 +318,7 @@ async def show_user_messages(update: Update) -> None:
             result = message_result_status(item)
             text = (
                 f"{idx}. Текст: {item.get('message', '')}\n"
-                f"Время отправки: {format_created_local_with_timezone(item)}\n"
+                f"Время отправки: {format_api_datetime(item.get('timecreated'))}\n"
                 f"Слежение: {tracking}\n"
                 f"Результат: {result}"
             )
@@ -514,7 +494,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             return
         try:
             sent_at = (update.message.date if update.message else None) or datetime.now(timezone.utc)
-            timezone_name = DEFAULT_USER_TIMEZONE.strip() or "UTC"
             check1_delay, check2_delay, check3_delay, message_mode = period
             response = api_post(
                 "/api/messages",
@@ -525,8 +504,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "last_name": user.last_name,
                     "message": draft_message,
                     "message_mode": message_mode,
-                    "user_timezone": timezone_name,
-                    "timecreated_utc": sent_at.astimezone(timezone.utc).isoformat(),
                     "check1_delay_seconds": check1_delay,
                     "check2_delay_seconds": check2_delay,
                     "check3_delay_seconds": check3_delay,
@@ -542,7 +519,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 "Сообщение сохранено.\n\n"
                 f"Текст: {draft_message}\n"
                 f"Отправитель: {sender_name} (username: {sender_username}, id: {user.id})\n"
-                f"Время отправки: {format_created_local_with_timezone(response.json())}",
+                f"Время отправки: {sent_at.astimezone(MOSCOW_TZ).strftime('%d.%m.%Y %H:%M:%S')}",
                 reply_markup=main_menu_keyboard(username),
             )
             return

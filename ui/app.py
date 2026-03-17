@@ -3,8 +3,7 @@ import hashlib
 import hmac
 import time
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 import requests
 import streamlit as st
 
@@ -149,40 +148,11 @@ def format_check_response(item: dict, check_no: int) -> str:
         return "Тревога"
     return value
 
-# Форматирование локального времени создания сообщения
-def format_created_local(item: dict) -> str:
-    timezone_name = (item.get("user_timezone") or "UTC").strip() or "UTC"
-    try:
-        target_tz = ZoneInfo(timezone_name)
-    except Exception:
-        target_tz = ZoneInfo("UTC")
-    local_value = item.get("timecreated_local")
-    if local_value:
-        raw_local = str(local_value).replace("Z", "+00:00")
-        try:
-            local_dt = datetime.fromisoformat(raw_local)
-            if local_dt.tzinfo is not None:
-                local_dt = local_dt.astimezone(target_tz)
-            return f"{local_dt.strftime('%d.%m.%Y %H:%M')} ({timezone_name})"
-        except ValueError:
-            return f"{format_created_at(local_value)} ({timezone_name})"
-    utc_value = item.get("timecreated")
-    if not utc_value:
-        return "-"
-    raw_utc = str(utc_value).replace("Z", "+00:00")
-    try:
-        utc_dt = datetime.fromisoformat(raw_utc)
-        if utc_dt.tzinfo is None:
-            utc_dt = utc_dt.replace(tzinfo=timezone.utc)
-        return f"{utc_dt.astimezone(target_tz).strftime('%d.%m.%Y %H:%M')} ({timezone_name})"
-    except ValueError:
-        return f"{format_created_at(utc_value)} ({timezone_name})"
-
 # Вычисление времени первого запроса
 def format_first_request_time(item: dict) -> str:
     check1_time = item.get("check1_time")
     if check1_time:
-        return format_created_local({"timecreated_local": check1_time, "user_timezone": item.get("user_timezone")})
+        return format_created_at(check1_time)
     time_created = item.get("timecreated")
     delay_seconds = int(item.get("check1_delay_seconds") or 0)
     if not time_created or delay_seconds <= 0:
@@ -192,15 +162,7 @@ def format_first_request_time(item: dict) -> str:
         created_dt = datetime.fromisoformat(raw)
     except ValueError:
         return "-"
-    timezone_name = (item.get("user_timezone") or "UTC").strip() or "UTC"
-    try:
-        target_tz = ZoneInfo(timezone_name)
-    except Exception:
-        target_tz = ZoneInfo("UTC")
-    if created_dt.tzinfo is None:
-        created_dt = created_dt.replace(tzinfo=timezone.utc)
-    local_dt = (created_dt + timedelta(seconds=delay_seconds)).astimezone(target_tz)
-    return f"{local_dt.strftime('%d.%m.%Y %H:%M')} ({timezone_name})"
+    return (created_dt + timedelta(seconds=delay_seconds)).strftime("%d.%m.%Y %H:%M")
 
 # Преобразование API записей в формат таблицы UI
 def map_table_rows(rows: list[dict]) -> list[dict]:
@@ -215,7 +177,7 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
                 "Username": item.get("username") or "-",
                 "Режим": item.get("message_mode") or "Реальный",
                 "Сообщение": shorten_message(item.get("message") or ""),
-                "Создано": format_created_local(item),
+                "Создано": format_created_at(item.get("timecreated")),
                 "Первый запрос": format_first_request_time(item),
                 "Ответ Check1": format_check_response(item, 1),
                 "Ответ Check2": format_check_response(item, 2),
