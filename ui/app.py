@@ -175,7 +175,7 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
                 "UserID": item.get("user_id"),
                 "Username": item.get("username") or "-",
                 "Режим": item.get("message_mode") or "Реальный",
-                "Сообщение": shorten_message(item.get("message") or ""),
+                "Сообщение": item.get("message") or "",
                 "Создано": format_created_at(item.get("timecreated")),
                 "Первый запрос": format_first_request_time(item),
                 "Ответ Check1": format_check_response(item, 1),
@@ -186,12 +186,6 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
             }
         )
     return mapped
-
-# Сокращение длинного текста сообщения
-def shorten_message(value: str, limit: int = 90) -> str:
-    if len(value) <= limit:
-        return value
-    return value[: limit - 1].rstrip() + "..."
 
 # Форматирование даты в человекочитаемый вид
 def format_created_at(value: str | None) -> str:
