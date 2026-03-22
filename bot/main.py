@@ -52,6 +52,7 @@ STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
 STATE_WAIT_FIRST_PERIOD = "wait_first_period"
+STATE_WAIT_FEEDBACK = "wait_feedback"
 DRAFT_MESSAGE_KEY = "draft_message_text"
 DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
@@ -127,6 +128,7 @@ def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
         ["Написать новое сообщение"],
         ["Прочитать свои сообщения"],
         ["Политика конфиденциальности"],
+        ["Обратная связь"],
     ]
     if is_architect_username(username):
         buttons.append(["Архитектор"])
@@ -475,6 +477,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data[STATE_KEY] = STATE_IDLE
         await privacy(update, context)
         return
+    if text == "Обратная связь":
+        context.user_data[STATE_KEY] = STATE_WAIT_FEEDBACK
+        await update.message.reply_text(
+            "Напишите ваше сообщение. Оно будет рассмотрено администрацией.",
+            reply_markup=flow_keyboard(),
+        )
+        return
     if state == STATE_IDLE:
         if is_ok_phrase:
             try:
@@ -578,6 +587,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
             return
+    if state == STATE_WAIT_FEEDBACK:
+        if not user:
+            context.user_data[STATE_KEY] = STATE_IDLE
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(username))
+            return
+        if not text:
+            await update.message.reply_text("Пустой текст. Напишите ваше сообщение.")
+            return
+        try:
+            response = api_post(
+                "/api/feedback",
+                {"user_id": user.id, "username": user.username, "message": text},
+            )
+            if not response.ok:
+                raise RuntimeError(f"api status {response.status_code}")
+            context.user_data[STATE_KEY] = STATE_IDLE
+            await update.message.reply_text(
+                "Спасибо за обратную связь! Ваше сообщение будет рассмотрено.",
+                reply_markup=main_menu_keyboard(username),
+            )
+        except Exception:
+            logger.exception("Failed to submit feedback")
+            await update.message.reply_text(
+                "Не удалось отправить сообщение. Попробуйте позже.",
+                reply_markup=main_menu_keyboard(username),
+            )
+        return
     await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard(username))
 
 # Обработка нажатий inline кнопок

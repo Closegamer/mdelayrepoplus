@@ -198,6 +198,51 @@ def format_created_at(value: str | None) -> str:
     except ValueError:
         return value
 
+# Преобразование записей обратной связи в формат таблицы UI
+def map_feedback_rows(rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "ID": item.get("id"),
+            "UserID": item.get("user_id"),
+            "Username": (item.get("username") or "-").strip() or "-",
+            "Время": format_created_at(item.get("timecreated")),
+            "Сообщение": item.get("message") or "",
+        }
+        for item in rows
+    ]
+
+
+# Рендер таблицы обратной связи (только просмотр, без удаления)
+def render_feedback_table(title: str, page_size: int, page_key: str) -> None:
+    ensure_page_offset_state(page_key)
+    offset = int(st.session_state[page_key])
+    st.subheader(title)
+    rows = api_get("/api/admin/feedback", params={"limit": page_size, "offset": offset})
+    if not rows:
+        st.info("Нет данных.")
+        if offset > 0:
+            st.session_state[page_key] = max(0, offset - page_size)
+            st.rerun()
+        return
+    mapped_rows = map_feedback_rows(rows)
+    st.table(mapped_rows)
+    page_number = (offset // page_size) + 1
+    _, nav_left, nav_center, nav_right, _ = st.columns([2, 2, 2, 2, 2], vertical_alignment="center")
+    with nav_left:
+        back_clicked = st.button("Назад", key=f"{page_key}_back", use_container_width=True, disabled=offset == 0)
+    with nav_center:
+        st.markdown(f"<div style='text-align:center;'>Страница {page_number}</div>", unsafe_allow_html=True)
+    with nav_right:
+        forward_disabled = len(rows) < page_size
+        next_clicked = st.button("Вперед", key=f"{page_key}_next", use_container_width=True, disabled=forward_disabled)
+    if back_clicked:
+        st.session_state[page_key] = max(0, offset - page_size)
+        st.rerun()
+    if next_clicked:
+        st.session_state[page_key] = offset + page_size
+        st.rerun()
+
+
 # Инициализация смещения пагинации для вкладки
 def ensure_page_offset_state(key: str) -> None:
     if key not in st.session_state:
@@ -276,6 +321,7 @@ def render_filters() -> int:
         st.session_state["messages_offset"] = 0
         st.session_state["alerts_offset"] = 0
         st.session_state["active_offset"] = 0
+        st.session_state["feedback_offset"] = 0
         st.rerun()
     if refresh_clicked:
         st.rerun()
@@ -301,13 +347,17 @@ def main() -> None:
     page_size = render_filters()
     try:
         render_overview()
-        tab_messages, tab_alerts, tab_active = st.tabs(["Сообщения", "Тревоги", "Активные проверки"])
+        tab_messages, tab_alerts, tab_active, tab_feedback = st.tabs(
+            ["Сообщения", "Тревоги", "Активные проверки", "Обратная связь"]
+        )
         with tab_messages:
             render_table("Последние сообщения", "/api/admin/messages", page_size, "messages_offset")
         with tab_alerts:
             render_table("Последние тревоги", "/api/admin/alerts", page_size, "alerts_offset")
         with tab_active:
             render_table("Активные проверки", "/api/admin/active-checks", page_size, "active_offset")
+        with tab_feedback:
+            render_feedback_table("Обратная связь", page_size, "feedback_offset")
     except Exception as exc:
         st.error(f"Ошибка загрузки данных: {exc}")
     render_footer()

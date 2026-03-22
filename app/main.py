@@ -2,16 +2,19 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.db import Base, SessionLocal, engine
-from app.models import Message
+from app.models import Feedback, Message
 from app.schemas import (
     ActiveCheckOut,
     AdminOverviewOut,
+    FeedbackCreateIn,
+    FeedbackOut,
     HealthOut,
     MessageCreate,
     MessageOut,
     MessageResponseIn,
 )
 from app.services import (
+    create_feedback,
     create_message,
     delete_message_by_id,
     delete_user_message,
@@ -19,6 +22,7 @@ from app.services import (
     get_admin_overview,
     list_active_checks,
     list_alert_messages,
+    list_feedback,
     list_recent_messages,
     list_user_messages,
     submit_response,
@@ -124,6 +128,25 @@ def respond_endpoint(payload: MessageResponseIn, db: Session = Depends(get_db)) 
         raise HTTPException(status_code=404, detail="No active check for this user")
     return _to_out(pending)
 
+@app.post("/api/feedback", response_model=FeedbackOut, status_code=status.HTTP_201_CREATED)
+
+# Сохранение обратной связи от пользователя
+def create_feedback_endpoint(payload: FeedbackCreateIn, db: Session = Depends(get_db)) -> FeedbackOut:
+    obj = create_feedback(
+        db=db,
+        user_id=payload.user_id,
+        username=payload.username,
+        message_text=payload.message,
+    )
+    return FeedbackOut(
+        id=obj.id,
+        user_id=obj.userid,
+        username=obj.username,
+        timecreated=obj.timecreated,
+        message=obj.message,
+    )
+
+
 @app.get("/api/users/{user_id}/active-check", response_model=ActiveCheckOut)
 
 # Возврат текущей активной проверки пользователя
@@ -167,6 +190,27 @@ def admin_alerts_endpoint(
 ) -> list[MessageOut]:
     rows = list_alert_messages(db, limit=limit, offset=offset)
     return [_to_out(item) for item in rows]
+
+@app.get("/api/admin/feedback", response_model=list[FeedbackOut])
+
+# Возврат обратной связи с пагинацией для админки
+def admin_feedback_endpoint(
+    limit: int = Query(24, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+) -> list[FeedbackOut]:
+    rows = list_feedback(db, limit=limit, offset=offset)
+    return [
+        FeedbackOut(
+            id=item.id,
+            user_id=item.userid,
+            username=item.username,
+            timecreated=item.timecreated,
+            message=item.message,
+        )
+        for item in rows
+    ]
+
 
 @app.get("/api/admin/active-checks", response_model=list[MessageOut])
 

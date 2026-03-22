@@ -31,3 +31,18 @@ class Message(Base):
 
 Index("idx_messages_userid", Message.userid)
 Index("idx_messages_timecreated", Message.timecreated)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    userid: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(Text, nullable=True)
+    timecreated: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+Index("idx_feedback_userid", Feedback.userid)
+Index("idx_feedback_timecreated", Feedback.timecreated)

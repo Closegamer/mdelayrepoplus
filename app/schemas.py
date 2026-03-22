@@ -48,6 +48,20 @@ class ActiveCheckOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
 
+class FeedbackCreateIn(BaseModel):
+    user_id: int
+    username: str | None = None
+    message: str = Field(min_length=1)
+
+
+class FeedbackOut(BaseModel):
+    id: int
+    user_id: int
+    username: str | None
+    timecreated: datetime
+    message: str
+
+
 class AdminOverviewOut(BaseModel):
     total_messages: int
     total_users: int

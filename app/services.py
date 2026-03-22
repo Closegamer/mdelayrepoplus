@@ -4,7 +4,7 @@ from typing import Callable
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.models import Message
+from app.models import Feedback, Message
 
 OK_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
@@ -271,6 +271,31 @@ def list_active_checks(db: Session, limit: int, offset: int) -> list[Message]:
         .limit(limit)
         .all()
     )
+
+# Создание записи обратной связи
+def create_feedback(
+    db: Session,
+    user_id: int,
+    username: str | None,
+    message_text: str,
+) -> Feedback:
+    obj = Feedback(userid=user_id, username=username, message=message_text)
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+# Возврат обратной связи с пагинацией для админки
+def list_feedback(db: Session, limit: int, offset: int) -> list[Feedback]:
+    return (
+        db.query(Feedback)
+        .order_by(Feedback.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
 
 # Возврат агрегированных метрик для админки
 def get_admin_overview(db: Session) -> dict:
