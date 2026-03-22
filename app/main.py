@@ -50,6 +50,7 @@ def startup() -> None:
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check2_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check3_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS user_response_text TEXT"))
+        conn.execute(text("ALTER TABLE feedback DROP COLUMN IF EXISTS username"))
 
 @app.get("/health", response_model=HealthOut)
 
@@ -132,16 +133,10 @@ def respond_endpoint(payload: MessageResponseIn, db: Session = Depends(get_db)) 
 
 # Сохранение обратной связи от пользователя
 def create_feedback_endpoint(payload: FeedbackCreateIn, db: Session = Depends(get_db)) -> FeedbackOut:
-    obj = create_feedback(
-        db=db,
-        user_id=payload.user_id,
-        username=payload.username,
-        message_text=payload.message,
-    )
+    obj = create_feedback(db=db, user_id=payload.user_id, message_text=payload.message)
     return FeedbackOut(
         id=obj.id,
         user_id=obj.userid,
-        username=obj.username,
         timecreated=obj.timecreated,
         message=obj.message,
     )
@@ -204,7 +199,6 @@ def admin_feedback_endpoint(
         FeedbackOut(
             id=item.id,
             user_id=item.userid,
-            username=item.username,
             timecreated=item.timecreated,
             message=item.message,
         )

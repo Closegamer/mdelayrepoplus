@@ -273,13 +273,8 @@ def list_active_checks(db: Session, limit: int, offset: int) -> list[Message]:
     )
 
 # Создание записи обратной связи
-def create_feedback(
-    db: Session,
-    user_id: int,
-    username: str | None,
-    message_text: str,
-) -> Feedback:
-    obj = Feedback(userid=user_id, username=username, message=message_text)
+def create_feedback(db: Session, user_id: int, message_text: str) -> Feedback:
+    obj = Feedback(userid=user_id, message=message_text)
     db.add(obj)
     db.commit()
     db.refresh(obj)

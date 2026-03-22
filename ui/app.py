@@ -204,7 +204,6 @@ def map_feedback_rows(rows: list[dict]) -> list[dict]:
         {
             "ID": item.get("id"),
             "UserID": item.get("user_id"),
-            "Username": (item.get("username") or "-").strip() or "-",
             "Время": format_created_at(item.get("timecreated")),
             "Сообщение": item.get("message") or "",
         }

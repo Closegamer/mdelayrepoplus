@@ -50,14 +50,12 @@ class HealthOut(BaseModel):
 
 class FeedbackCreateIn(BaseModel):
     user_id: int
-    username: str | None = None
     message: str = Field(min_length=1)
 
 
 class FeedbackOut(BaseModel):
     id: int
     user_id: int
-    username: str | None
     timecreated: datetime
     message: str
 

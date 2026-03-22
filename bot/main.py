@@ -598,7 +598,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         try:
             response = api_post(
                 "/api/feedback",
-                {"user_id": user.id, "username": user.username, "message": text},
+                {"user_id": user.id, "message": text},
             )
             if not response.ok:
                 raise RuntimeError(f"api status {response.status_code}")
