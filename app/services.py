@@ -293,6 +293,13 @@ def list_feedback(db: Session, limit: int, offset: int) -> list[Feedback]:
     )
 
 
+# Удаление записи обратной связи по идентификатору
+def delete_feedback_by_id(db: Session, feedback_id: int) -> bool:
+    deleted = db.query(Feedback).filter(Feedback.id == feedback_id).delete()
+    db.commit()
+    return deleted > 0
+
+
 # Проверка доступности бота через Telegram API getMe
 def get_bot_telegram_health() -> dict[str, Any]:
     token = (settings.bot_token or "").strip()

@@ -17,6 +17,7 @@ from app.schemas import (
 from app.services import (
     create_feedback,
     create_message,
+    delete_feedback_by_id,
     delete_message_by_id,
     delete_user_message,
     get_active_check_for_user,
@@ -213,6 +214,14 @@ def admin_feedback_endpoint(
         )
         for item in rows
     ]
+
+
+@app.delete("/api/admin/feedback/{feedback_id}", status_code=status.HTTP_204_NO_CONTENT)
+
+# Удаление записи обратной связи из админки
+def admin_delete_feedback_endpoint(feedback_id: int, db: Session = Depends(get_db)) -> None:
+    if not delete_feedback_by_id(db, feedback_id=feedback_id):
+        raise HTTPException(status_code=404, detail="Feedback not found")
 
 
 @app.get("/api/admin/active-checks", response_model=list[MessageOut])

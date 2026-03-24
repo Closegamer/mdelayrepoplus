@@ -211,7 +211,7 @@ def map_feedback_rows(rows: list[dict]) -> list[dict]:
     ]
 
 
-# Рендер таблицы обратной связи (только просмотр, без удаления)
+# Рендер таблицы обратной связи с пагинацией и удалением
 def render_feedback_table(title: str, page_size: int, page_key: str) -> None:
     ensure_page_offset_state(page_key)
     offset = int(st.session_state[page_key])
@@ -225,6 +225,24 @@ def render_feedback_table(title: str, page_size: int, page_key: str) -> None:
         return
     mapped_rows = map_feedback_rows(rows)
     st.table(mapped_rows)
+    ids = [row.get("ID") for row in mapped_rows if row.get("ID") is not None]
+    if ids:
+        delete_select_col, delete_btn_col, _ = st.columns([3, 2, 5], vertical_alignment="bottom")
+        with delete_select_col:
+            selected_id = st.selectbox("ID записи для удаления", ids, key=f"{page_key}_delete_id")
+        with delete_btn_col:
+            if st.button("Удалить запись", key=f"{page_key}_delete_button", use_container_width=True):
+                try:
+                    response = api_delete(f"/api/admin/feedback/{selected_id}")
+                    if response.status_code == 204:
+                        st.success(f"Запись обратной связи {selected_id} удалена.")
+                        st.rerun()
+                    elif response.status_code == 404:
+                        st.warning("Запись не найдена или уже удалена.")
+                    else:
+                        st.error("Не удалось удалить запись.")
+                except Exception as exc:
+                    st.error(f"Ошибка удаления: {exc}")
     page_number = (offset // page_size) + 1
     _, nav_left, nav_center, nav_right, _ = st.columns([2, 2, 2, 2, 2], vertical_alignment="center")
     with nav_left:
