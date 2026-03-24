@@ -309,13 +309,25 @@ def render_header() -> None:
 
 # Рендер панели фильтров и управления страницей
 def render_filters() -> int:
-    f1, f2, f3, _ = st.columns([2, 1, 1, 6], vertical_alignment="bottom")
+    f1, f2, f3, f4, _ = st.columns([2, 1, 1, 2, 4], vertical_alignment="bottom")
     with f1:
         page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
     with f2:
         apply_clicked = st.button("Применить", use_container_width=True)
     with f3:
         refresh_clicked = st.button("Обновить", use_container_width=True)
+    with f4:
+        if st.button("Проверка здоровья бота", use_container_width=True):
+            try:
+                health = api_get("/api/admin/bot-health")
+                if health.get("ok"):
+                    uname = health.get("bot_username") or "—"
+                    bid = health.get("bot_id")
+                    st.success(f"Бот доступен в Telegram: @{uname} (id {bid}).")
+                else:
+                    st.error(f"Бот недоступен или ошибка: {health.get('error') or 'неизвестно'}")
+            except Exception as exc:
+                st.error(f"Не удалось выполнить проверку: {exc}")
     if apply_clicked:
         st.session_state["messages_offset"] = 0
         st.session_state["alerts_offset"] = 0

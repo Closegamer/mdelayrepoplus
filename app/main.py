@@ -6,6 +6,7 @@ from app.models import Feedback, Message
 from app.schemas import (
     ActiveCheckOut,
     AdminOverviewOut,
+    BotHealthOut,
     FeedbackCreateIn,
     FeedbackOut,
     HealthOut,
@@ -20,6 +21,7 @@ from app.services import (
     delete_user_message,
     get_active_check_for_user,
     get_admin_overview,
+    get_bot_telegram_health,
     list_active_checks,
     list_alert_messages,
     list_feedback,
@@ -150,6 +152,13 @@ def active_check_endpoint(user_id: int, db: Session = Depends(get_db)) -> Active
     if not active:
         raise HTTPException(status_code=404, detail="No active check")
     return ActiveCheckOut(**active)
+
+@app.get("/api/admin/bot-health", response_model=BotHealthOut)
+
+# Проверка связи бота с Telegram (getMe)
+def admin_bot_health_endpoint() -> BotHealthOut:
+    return BotHealthOut(**get_bot_telegram_health())
+
 
 @app.get("/api/admin/overview", response_model=AdminOverviewOut)
 

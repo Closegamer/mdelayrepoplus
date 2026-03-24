@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import re
-from typing import Callable
+from typing import Any, Callable
+import requests
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 from app.config import settings
@@ -290,6 +291,50 @@ def list_feedback(db: Session, limit: int, offset: int) -> list[Feedback]:
         .limit(limit)
         .all()
     )
+
+
+# Проверка доступности бота через Telegram API getMe
+def get_bot_telegram_health() -> dict[str, Any]:
+    token = (settings.bot_token or "").strip()
+    if not token:
+        return {
+            "ok": False,
+            "telegram_ok": False,
+            "bot_username": None,
+            "bot_id": None,
+            "error": "BOT_TOKEN не задан",
+        }
+    try:
+        response = requests.get(
+            f"https://api.telegram.org/bot{token}/getMe",
+            timeout=10,
+        )
+        body = response.json()
+        if body.get("ok") and body.get("result"):
+            result = body["result"]
+            return {
+                "ok": True,
+                "telegram_ok": True,
+                "bot_username": result.get("username"),
+                "bot_id": result.get("id"),
+                "error": None,
+            }
+        err = body.get("description") or response.text or f"HTTP {response.status_code}"
+        return {
+            "ok": False,
+            "telegram_ok": False,
+            "bot_username": None,
+            "bot_id": None,
+            "error": err,
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "telegram_ok": False,
+            "bot_username": None,
+            "bot_id": None,
+            "error": str(exc),
+        }
 
 
 # Возврат агрегированных метрик для админки

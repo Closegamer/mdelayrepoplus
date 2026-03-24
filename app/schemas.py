@@ -48,6 +48,14 @@ class ActiveCheckOut(BaseModel):
 class HealthOut(BaseModel):
     status: str
 
+
+class BotHealthOut(BaseModel):
+    ok: bool
+    telegram_ok: bool
+    bot_username: str | None = None
+    bot_id: int | None = None
+    error: str | None = None
+
 class FeedbackCreateIn(BaseModel):
     user_id: int
     message: str = Field(min_length=1)
