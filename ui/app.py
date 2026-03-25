@@ -2,6 +2,7 @@ import os
 import hashlib
 import hmac
 import time
+from html import escape
 from pathlib import Path
 from datetime import datetime, timedelta
 import requests
@@ -358,13 +359,37 @@ def render_filters() -> int:
 
         # Стиль кнопки: зеленая на 10 минут после OK (с угасанием), иначе красная при ERROR.
         # Streamlit не даёт нативно параметр color для st.button, поэтому переопределяем стили CSS по aria-label.
-        css = ""
+        css = f"""
+<style>
+button[aria-label="{btn_label}"] {{
+    height: 44px !important;
+    white-space: nowrap !important;
+    font-size: 14px !important;
+}}
+button[aria-label="{btn_label}"] > div {{
+    white-space: nowrap !important;
+}}
+.bot-health-info {{
+    height: 44px;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    border: 1px solid #2a313b;
+    padding: 0 12px;
+    background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: #b7c0cd;
+}}
+</style>
+"""
         if ok_until > now_ts:
             remaining = ok_until - now_ts
             # alpha: 1.0 -> 0.0 линейно за 10 минут
             alpha = max(0.0, min(1.0, remaining / (10 * 60)))
-            css = f"""
-<style>
+            css += f"""
 button[aria-label="{btn_label}"] {{
     background-color: rgba(16, 185, 129, {alpha}) !important;
     border: 1px solid rgba(16, 185, 129, {alpha}) !important;
@@ -373,29 +398,30 @@ button[aria-label="{btn_label}"] {{
 button[aria-label="{btn_label}"] > div {{
     color: #ffffff !important;
 }}
-</style>
 """
         elif last_ok is False:
-            css = f"""
-<style>
-button[aria-label="{btn_label}"] {{
+            css += """
+button[aria-label="{btn_label}"] {
     background-color: rgba(239, 68, 68, 0.95) !important;
     border: 1px solid rgba(239, 68, 68, 0.95) !important;
     color: #ffffff !important;
-}}
-button[aria-label="{btn_label}"] > div {{
+}
+button[aria-label="{btn_label}"] > div {
     color: #ffffff !important;
-}}
-</style>
-"""
-        if css:
-            st.markdown(css, unsafe_allow_html=True)
+}
+""".replace("{btn_label}", btn_label)
 
-        btn_col, info_col = st.columns([1, 2])
+        st.markdown(css, unsafe_allow_html=True)
+
+        btn_col, info_col = st.columns([1, 1])
         with btn_col:
             clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
         with info_col:
-            st.caption(st.session_state.get("bot_health_display_text") or "")
+            info_text = st.session_state.get("bot_health_display_text") or ""
+            st.markdown(
+                f"<div class='bot-health-info'>{escape(info_text)}</div>",
+                unsafe_allow_html=True,
+            )
 
         if clicked:
             try:
