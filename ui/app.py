@@ -335,17 +335,38 @@ def render_filters() -> int:
     with f3:
         refresh_clicked = st.button("Обновить", use_container_width=True)
     with f4:
-        if st.button("Проверка здоровья бота", use_container_width=True):
+        if "bot_health_button_label" not in st.session_state:
+            st.session_state["bot_health_button_label"] = "Проверка здоровья бота"
+
+        def _truncate(text: str, limit: int) -> str:
+            t = (text or "").strip().replace("\n", " ")
+            if len(t) <= limit:
+                return t
+            if limit <= 3:
+                return t[:limit]
+            return t[: limit - 3] + "..."
+
+        if st.button(st.session_state["bot_health_button_label"], use_container_width=True):
             try:
                 health = api_get("/api/admin/bot-health")
                 if health.get("ok"):
-                    uname = health.get("bot_username") or "—"
-                    bid = health.get("bot_id")
-                    st.success(f"Бот доступен в Telegram: @{uname} (id {bid}).")
+                    uname = health.get("bot_username")
+                    label = "Проверка здоровья бота: OK"
+                    if uname:
+                        st.session_state["bot_health_button_label"] = f"{label} (@{uname})"
+                    else:
+                        st.session_state["bot_health_button_label"] = label
                 else:
-                    st.error(f"Бот недоступен или ошибка: {health.get('error') or 'неизвестно'}")
+                    err = health.get("error") or "неизвестно"
+                    st.session_state["bot_health_button_label"] = (
+                        f"Проверка здоровья бота: ERROR ({_truncate(str(err), 28)})"
+                    )
+                st.rerun()
             except Exception as exc:
-                st.error(f"Не удалось выполнить проверку: {exc}")
+                st.session_state["bot_health_button_label"] = (
+                    f"Проверка здоровья бота: ERROR ({_truncate(str(exc), 28)})"
+                )
+                st.rerun()
     if apply_clicked:
         st.session_state["messages_offset"] = 0
         st.session_state["alerts_offset"] = 0
