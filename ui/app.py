@@ -335,8 +335,12 @@ def render_filters() -> int:
     with f3:
         refresh_clicked = st.button("Обновить", use_container_width=True)
     with f4:
-        if "bot_health_button_label" not in st.session_state:
-            st.session_state["bot_health_button_label"] = "Проверка здоровья бота"
+        if "bot_health_display_text" not in st.session_state:
+            st.session_state["bot_health_display_text"] = "Проверить здоровье бота: НЕ ПРОВЕРЕНО"
+        if "bot_health_ok_until_ts" not in st.session_state:
+            st.session_state["bot_health_ok_until_ts"] = 0.0
+        if "bot_health_last_ok" not in st.session_state:
+            st.session_state["bot_health_last_ok"] = None
 
         def _truncate(text: str, limit: int) -> str:
             t = (text or "").strip().replace("\n", " ")
@@ -346,25 +350,81 @@ def render_filters() -> int:
                 return t[:limit]
             return t[: limit - 3] + "..."
 
-        if st.button(st.session_state["bot_health_button_label"], use_container_width=True):
+        now_ts = time.time()
+        ok_until = float(st.session_state.get("bot_health_ok_until_ts") or 0.0)
+        last_ok = st.session_state.get("bot_health_last_ok")
+
+        btn_label = "Проверить здоровье бота"
+
+        # Стиль кнопки: зеленая на 10 минут после OK (с угасанием), иначе красная при ERROR.
+        # Streamlit не даёт нативно параметр color для st.button, поэтому переопределяем стили CSS по aria-label.
+        css = ""
+        if ok_until > now_ts:
+            remaining = ok_until - now_ts
+            # alpha: 1.0 -> 0.0 линейно за 10 минут
+            alpha = max(0.0, min(1.0, remaining / (10 * 60)))
+            css = f"""
+<style>
+button[aria-label="{btn_label}"] {{
+    background-color: rgba(16, 185, 129, {alpha}) !important;
+    border: 1px solid rgba(16, 185, 129, {alpha}) !important;
+    color: #ffffff !important;
+}}
+button[aria-label="{btn_label}"] > div {{
+    color: #ffffff !important;
+}}
+</style>
+"""
+        elif last_ok is False:
+            css = f"""
+<style>
+button[aria-label="{btn_label}"] {{
+    background-color: rgba(239, 68, 68, 0.95) !important;
+    border: 1px solid rgba(239, 68, 68, 0.95) !important;
+    color: #ffffff !important;
+}}
+button[aria-label="{btn_label}"] > div {{
+    color: #ffffff !important;
+}}
+</style>
+"""
+        if css:
+            st.markdown(css, unsafe_allow_html=True)
+
+        btn_col, info_col = st.columns([1, 2])
+        with btn_col:
+            clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
+        with info_col:
+            st.caption(st.session_state.get("bot_health_display_text") or "")
+
+        if clicked:
             try:
                 health = api_get("/api/admin/bot-health")
                 if health.get("ok"):
+                    st.session_state["bot_health_last_ok"] = True
+                    st.session_state["bot_health_ok_until_ts"] = time.time() + 10 * 60
                     uname = health.get("bot_username")
-                    label = "Проверка здоровья бота: OK"
+                    bid = health.get("bot_id")
                     if uname:
-                        st.session_state["bot_health_button_label"] = f"{label} (@{uname})"
+                        status = f"OK (@{uname})"
+                    elif bid is not None:
+                        status = f"OK (id {bid})"
                     else:
-                        st.session_state["bot_health_button_label"] = label
+                        status = "OK"
+                    st.session_state["bot_health_display_text"] = f"Проверить здоровье бота: {status}"
                 else:
+                    st.session_state["bot_health_last_ok"] = False
+                    st.session_state["bot_health_ok_until_ts"] = 0.0
                     err = health.get("error") or "неизвестно"
-                    st.session_state["bot_health_button_label"] = (
-                        f"Проверка здоровья бота: ERROR ({_truncate(str(err), 28)})"
+                    st.session_state["bot_health_display_text"] = (
+                        f"Проверить здоровье бота: ERROR ({_truncate(str(err), 120)})"
                     )
                 st.rerun()
             except Exception as exc:
-                st.session_state["bot_health_button_label"] = (
-                    f"Проверка здоровья бота: ERROR ({_truncate(str(exc), 28)})"
+                st.session_state["bot_health_last_ok"] = False
+                st.session_state["bot_health_ok_until_ts"] = 0.0
+                st.session_state["bot_health_display_text"] = (
+                    f"Проверить здоровье бота: ERROR ({_truncate(str(exc), 120)})"
                 )
                 st.rerun()
     if apply_clicked:
