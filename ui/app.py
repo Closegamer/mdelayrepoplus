@@ -2,7 +2,6 @@ import os
 import hashlib
 import hmac
 import time
-from html import escape
 from pathlib import Path
 from datetime import datetime, timedelta
 import requests
@@ -249,7 +248,7 @@ def render_feedback_table(title: str, page_size: int, page_key: str) -> None:
     with nav_left:
         back_clicked = st.button("Назад", key=f"{page_key}_back", use_container_width=True, disabled=offset == 0)
     with nav_center:
-        st.markdown(f"<div style='text-align:center;'>Страница {page_number}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='page-number'>Страница {page_number}</div>", unsafe_allow_html=True)
     with nav_right:
         forward_disabled = len(rows) < page_size
         next_clicked = st.button("Вперед", key=f"{page_key}_next", use_container_width=True, disabled=forward_disabled)
@@ -303,7 +302,7 @@ def render_table(title: str, endpoint: str, page_size: int, page_key: str) -> No
     with nav_left:
         back_clicked = st.button("Назад", key=f"{page_key}_back", use_container_width=True, disabled=offset == 0)
     with nav_center:
-        st.markdown(f"<div style='text-align:center;'>Страница {page_number}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='page-number'>Страница {page_number}</div>", unsafe_allow_html=True)
     with nav_right:
         forward_disabled = len(rows) < page_size
         next_clicked = st.button("Вперед", key=f"{page_key}_next", use_container_width=True, disabled=forward_disabled)
@@ -328,7 +327,7 @@ def render_header() -> None:
 
 # Рендер панели фильтров и управления страницей
 def render_filters() -> int:
-    f1, f2, f3, f4, f5, _ = st.columns([2, 1, 1, 1, 1, 4], vertical_alignment="bottom")
+    f1, f2, f3, f4, _ = st.columns([2, 1, 1, 1, 5], vertical_alignment="bottom")
     with f1:
         page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
     with f2:
@@ -336,74 +335,26 @@ def render_filters() -> int:
     with f3:
         refresh_clicked = st.button("Обновить", use_container_width=True)
     with f4:
-        if "bot_health_display_text" not in st.session_state:
-            st.session_state["bot_health_display_text"] = "—"
-        if "bot_health_ok_until_ts" not in st.session_state:
-            st.session_state["bot_health_ok_until_ts"] = 0.0
-        if "bot_health_last_ok" not in st.session_state:
-            st.session_state["bot_health_last_ok"] = None
+        if "bot_health_button_text" not in st.session_state:
+            st.session_state["bot_health_button_text"] = "Здоровье"
 
-        def _truncate(text: str, limit: int) -> str:
-            t = (text or "").strip().replace("\n", " ")
-            if len(t) <= limit:
-                return t
-            if limit <= 3:
-                return t[:limit]
-            return t[: limit - 3] + "..."
-
-        now_ts = time.time()
-        ok_until = float(st.session_state.get("bot_health_ok_until_ts") or 0.0)
-        last_ok = st.session_state.get("bot_health_last_ok")
-
-        btn_label = "Здоровье"
-
-        # Динамика цвета (ок/ошибка) через CSS-переменные; базовые стили лежат в ui/styles.css
-        bg = "transparent"
-        border = "transparent"
-        fg = "inherit"
-        if ok_until > now_ts:
-            remaining = ok_until - now_ts
-            alpha = max(0.0, min(1.0, remaining / 10))
-            bg = f"rgba(16, 185, 129, {alpha})"
-            border = bg
-            fg = "#ffffff"
-        elif last_ok is False:
-            bg = "rgba(239, 68, 68, 0.95)"
-            border = bg
-            fg = "#ffffff"
-        st.markdown(
-            "<style>"
-            f":root{{--bot-health-bg:{bg};--bot-health-border:{border};--bot-health-fg:{fg};}}"
-            "</style>",
-            unsafe_allow_html=True,
-        )
-
-        clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
-
-    with f5:
-        info_text = st.session_state.get("bot_health_display_text") or ""
-        st.markdown(
-            f"<div class='bot-health-info'>{escape(info_text)}</div>",
-            unsafe_allow_html=True,
+        clicked = st.button(
+            st.session_state["bot_health_button_text"],
+            key="bot_health_check_button",
+            use_container_width=True,
         )
 
     if clicked:
         try:
             health = api_get("/api/admin/bot-health")
             if health.get("ok"):
-                st.session_state["bot_health_last_ok"] = True
-                st.session_state["bot_health_ok_until_ts"] = time.time() + 10
                 bid = health.get("bot_id")
-                st.session_state["bot_health_display_text"] = f"200, {bid if bid is not None else '-'}"
+                st.session_state["bot_health_button_text"] = f"200, {bid if bid is not None else '-'}"
             else:
-                st.session_state["bot_health_last_ok"] = False
-                st.session_state["bot_health_ok_until_ts"] = 0.0
-                st.session_state["bot_health_display_text"] = "500, -"
+                st.session_state["bot_health_button_text"] = "500, -"
             st.rerun()
         except Exception:
-            st.session_state["bot_health_last_ok"] = False
-            st.session_state["bot_health_ok_until_ts"] = 0.0
-            st.session_state["bot_health_display_text"] = "500, -"
+            st.session_state["bot_health_button_text"] = "500, -"
             st.rerun()
     if apply_clicked:
         st.session_state["messages_offset"] = 0
@@ -419,7 +370,7 @@ def render_filters() -> int:
 def render_footer() -> None:
     st.markdown("---")
     st.markdown(
-        "<div style='text-align:center;'>writtenBy(Closegamer, 2026, All rights reserved)</div>",
+        "<div class='footer-center'>writtenBy(Closegamer, 2026, All rights reserved)</div>",
         unsafe_allow_html=True,
     )
 
