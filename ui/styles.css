@@ -37,3 +37,43 @@
 div[data-testid="stForm"] {
     text-align: center;
 }
+
+/* Bot health button + info box (adminka) */
+:root {
+    --bot-health-bg: transparent;
+    --bot-health-border: transparent;
+    --bot-health-fg: inherit;
+}
+
+.stButton > button[aria-label="Здоровье"] {
+    height: 38px !important;
+    white-space: nowrap !important;
+    background-color: var(--bot-health-bg) !important;
+    border: 1px solid var(--bot-health-border) !important;
+    color: var(--bot-health-fg) !important;
+}
+
+.stButton > button[aria-label="Здоровье"] > div {
+    white-space: nowrap !important;
+    color: var(--bot-health-fg) !important;
+}
+
+.bot-health-info {
+    height: 38px;
+    display: flex;
+    align-items: center;
+    border-radius: 8px;
+    border: 1px solid #2a313b;
+    padding: 0 10px;
+    background: linear-gradient(180deg, #161b22 0%, #11161c 100%);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    color: #b7c0cd;
+    margin-top: 0;
+}
+
+.bot-health-info p {
+    margin: 0 !important;
+}

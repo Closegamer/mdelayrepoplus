@@ -328,7 +328,7 @@ def render_header() -> None:
 
 # Рендер панели фильтров и управления страницей
 def render_filters() -> int:
-    f1, f2, f3, f4, f5, _ = st.columns([2, 1, 1, 1, 1, 4], vertical_alignment="bottom")
+    f1, f2, f3, f4, _ = st.columns([2, 1, 1, 2, 4], vertical_alignment="bottom")
     with f1:
         page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
     with f2:
@@ -357,65 +357,43 @@ def render_filters() -> int:
 
         btn_label = "Здоровье"
 
-        # Стиль кнопки: зеленая на 10 минут после OK (с угасанием), иначе красная при ERROR.
-        # Streamlit не даёт нативно параметр color для st.button, поэтому переопределяем стили CSS по aria-label.
-        css_rules = [
-            f'button[aria-label="{btn_label}"] {{ white-space: nowrap !important; }}',
-            f'button[aria-label="{btn_label}"] > div {{ white-space: nowrap !important; }}',
-            ".bot-health-info {"
-            "  height: 38px;"
-            "  display: flex;"
-            "  align-items: center;"
-            "  border-radius: 8px;"
-            "  border: 1px solid #2a313b;"
-            "  padding: 0 10px;"
-            "  background: linear-gradient(180deg, #161b22 0%, #11161c 100%);"
-            "  white-space: nowrap;"
-            "  overflow: hidden;"
-            "  text-overflow: ellipsis;"
-            "  font-size: 12px;"
-            "  color: #b7c0cd;"
-            "}",
-        ]
+        # Динамика цвета (ок/ошибка) через CSS-переменные; базовые стили лежат в ui/styles.css
+        bg = "transparent"
+        border = "transparent"
+        fg = "inherit"
         if ok_until > now_ts:
             remaining = ok_until - now_ts
-            # alpha: 1.0 -> 0.0 линейно за 10 минут
-            alpha = max(0.0, min(1.0, remaining / (10 * 60)))
-            css_rules.append(
-                f'button[aria-label="{btn_label}"] {{'
-                f"  background-color: rgba(16, 185, 129, {alpha}) !important;"
-                f"  border: 1px solid rgba(16, 185, 129, {alpha}) !important;"
-                "  color: #ffffff !important;"
-                "}"
-            )
-            css_rules.append(f'button[aria-label="{btn_label}"] > div {{ color: #ffffff !important; }}')
+            alpha = max(0.0, min(1.0, remaining / 10))
+            bg = f"rgba(16, 185, 129, {alpha})"
+            border = bg
+            fg = "#ffffff"
         elif last_ok is False:
-            css_rules.append(
-                f'button[aria-label="{btn_label}"] {{'
-                "  background-color: rgba(239, 68, 68, 0.95) !important;"
-                "  border: 1px solid rgba(239, 68, 68, 0.95) !important;"
-                "  color: #ffffff !important;"
-                "}"
-            )
-            css_rules.append(f'button[aria-label="{btn_label}"] > div {{ color: #ffffff !important; }}')
-
-        st.markdown("<style>\n" + "\n".join(css_rules) + "\n</style>", unsafe_allow_html=True)
-
-        clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
-
-    with f5:
-        info_text = st.session_state.get("bot_health_display_text") or ""
+            bg = "rgba(239, 68, 68, 0.95)"
+            border = bg
+            fg = "#ffffff"
         st.markdown(
-            f"<div class='bot-health-info'>{escape(info_text)}</div>",
+            "<style>"
+            f":root{{--bot-health-bg:{bg};--bot-health-border:{border};--bot-health-fg:{fg};}}"
+            "</style>",
             unsafe_allow_html=True,
         )
+
+        btn_col, info_col = st.columns([1, 1], vertical_alignment="center")
+        with btn_col:
+            clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
+        with info_col:
+            info_text = st.session_state.get("bot_health_display_text") or ""
+            st.markdown(
+                f"<div class='bot-health-info'>{escape(info_text)}</div>",
+                unsafe_allow_html=True,
+            )
 
     if clicked:
         try:
             health = api_get("/api/admin/bot-health")
             if health.get("ok"):
                 st.session_state["bot_health_last_ok"] = True
-                st.session_state["bot_health_ok_until_ts"] = time.time() + 10 * 60
+                st.session_state["bot_health_ok_until_ts"] = time.time() + 10
                 bid = health.get("bot_id")
                 st.session_state["bot_health_display_text"] = f"200, {bid if bid is not None else '-'}"
             else:
