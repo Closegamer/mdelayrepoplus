@@ -45,7 +45,10 @@ div[data-testid="stForm"] {
     --bot-health-fg: inherit;
 }
 
-.stButton > button[aria-label="Здоровье"] {
+.stButton > button[aria-label="Здоровье"],
+.stButton > button[aria-label*="Здоровье"],
+button[aria-label="Здоровье"],
+button[aria-label*="Здоровье"] {
     height: 38px !important;
     white-space: nowrap !important;
     background-color: var(--bot-health-bg) !important;
@@ -53,7 +56,10 @@ div[data-testid="stForm"] {
     color: var(--bot-health-fg) !important;
 }
 
-.stButton > button[aria-label="Здоровье"] > div {
+.stButton > button[aria-label="Здоровье"] > div,
+.stButton > button[aria-label*="Здоровье"] > div,
+button[aria-label="Здоровье"] > div,
+button[aria-label*="Здоровье"] > div {
     white-space: nowrap !important;
     color: var(--bot-health-fg) !important;
 }
@@ -71,6 +77,7 @@ div[data-testid="stForm"] {
     text-overflow: ellipsis;
     font-size: 12px;
     color: #b7c0cd;
+    line-height: 38px;
     margin-top: 0;
 }
 

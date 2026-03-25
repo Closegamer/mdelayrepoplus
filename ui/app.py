@@ -328,7 +328,7 @@ def render_header() -> None:
 
 # Рендер панели фильтров и управления страницей
 def render_filters() -> int:
-    f1, f2, f3, f4, _ = st.columns([2, 1, 1, 2, 4], vertical_alignment="bottom")
+    f1, f2, f3, f4, f5, _ = st.columns([2, 1, 1, 1, 1, 4], vertical_alignment="bottom")
     with f1:
         page_size = st.selectbox("Количество записей", [12, 24, 48, 96], index=1)
     with f2:
@@ -378,15 +378,14 @@ def render_filters() -> int:
             unsafe_allow_html=True,
         )
 
-        btn_col, info_col = st.columns([1, 1], vertical_alignment="center")
-        with btn_col:
-            clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
-        with info_col:
-            info_text = st.session_state.get("bot_health_display_text") or ""
-            st.markdown(
-                f"<div class='bot-health-info'>{escape(info_text)}</div>",
-                unsafe_allow_html=True,
-            )
+        clicked = st.button(btn_label, key="bot_health_check_button", use_container_width=True)
+
+    with f5:
+        info_text = st.session_state.get("bot_health_display_text") or ""
+        st.markdown(
+            f"<div class='bot-health-info'>{escape(info_text)}</div>",
+            unsafe_allow_html=True,
+        )
 
     if clicked:
         try:
