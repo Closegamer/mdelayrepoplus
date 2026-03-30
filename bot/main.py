@@ -54,7 +54,7 @@ STATE_WAIT_MESSAGE = "wait_message"
 STATE_WAIT_FIRST_PERIOD = "wait_first_period"
 STATE_WAIT_FEEDBACK = "wait_feedback"
 DRAFT_MESSAGE_KEY = "draft_message_text"
-DEFAULT_SECOND_DELAY_SECONDS = 3 * 60 * 60
+DEFAULT_SECOND_DELAY_SECONDS = 1 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
 OK_CANONICAL_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
@@ -525,7 +525,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         context.user_data[STATE_KEY] = STATE_WAIT_FIRST_PERIOD
         await update.message.reply_text(
             "Выберите период до первого опроса.\n"
-            "Второй опрос будет через 3 часа после первого, третий - еще через 1 час.",
+            "Второй опрос будет через 1 час после первого, третий - еще через 1 час."
+            "\n(в тестовом режиме — все опросы через 1 минуту).",
             reply_markup=first_period_keyboard(),
         )
         return
