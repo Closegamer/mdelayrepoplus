@@ -46,8 +46,6 @@ POLLING_READ_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_READ_TIMEOUT_SECONDS", 3
 POLLING_CONNECT_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_CONNECT_TIMEOUT_SECONDS", 10)
 POLLING_POOL_TIMEOUT_SECONDS = get_env_int("BOT_POLLING_POOL_TIMEOUT_SECONDS", 10)
 POLLING_INTERVAL_SECONDS = get_env_float("BOT_POLLING_INTERVAL_SECONDS", 1.0)
-ARCHITECT_USERNAME = "closegamer"
-MENTOR_USERNAME = "kayumovru"
 STATE_KEY = "state"
 STATE_IDLE = "idle"
 STATE_WAIT_MESSAGE = "wait_message"
@@ -56,6 +54,7 @@ STATE_WAIT_FEEDBACK = "wait_feedback"
 DRAFT_MESSAGE_KEY = "draft_message_text"
 DEFAULT_SECOND_DELAY_SECONDS = 1 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
+ARCHITECT_USER_ID = 227287028
 OK_CANONICAL_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
 LATIN_TO_CYRILLIC_SIMILAR = str.maketrans(
@@ -79,7 +78,7 @@ LATIN_TO_CYRILLIC_SIMILAR = str.maketrans(
 def start_text(first_name: str) -> str:
     safe_first_name = escape(first_name)
     return (
-        f"Здравствуйте, {safe_first_name}! Вас приветствует бот KakDelaTorBot!\n\n"
+        f"Вас приветствует бот KakDelaTorBot!\n\n"
         "Если Вы собираетесь в опасное путешествие или в подозрительное место, "
         "Вы можете оставить сообщение, которое поможет Вас найти в случае непредвиденной ситуации "
         "или при отсутствии у Вас связи.\n\n"
@@ -104,36 +103,21 @@ def api_post(path: str, payload: dict) -> requests.Response:
 def api_delete(path: str, params: dict | None = None) -> requests.Response:
     return requests.delete(f"{API_BASE_URL}{path}", params=params, timeout=15)
 
-# Проверка доступа к кнопке архитектора
-def is_architect_username(username: str | None) -> bool:
-    return bool(username and username.lower() == ARCHITECT_USERNAME)
-
-# Проверка доступа к кнопке наставника
-def is_nastavnik_username(username: str | None) -> bool:
-    return bool(username and username.lower() == MENTOR_USERNAME)
-
-# Чтение содержимого README файла
-def read_readme_text() -> str:
-    readme_path = Path(__file__).resolve().parents[1] / "README.md"
-    return readme_path.read_text(encoding="utf-8")
-
 # Чтение текста политики конфиденциальности
 def read_privacy_policy_text() -> str:
     policy_path = Path(__file__).resolve().parents[1] / "PRIVACY_POLICY.md"
     return policy_path.read_text(encoding="utf-8")
 
 # Возврат клавиатуры главного меню
-def main_menu_keyboard(username: str | None = None) -> ReplyKeyboardMarkup:
+def main_menu_keyboard(user_id: int | None = None) -> ReplyKeyboardMarkup:
     buttons = [
         ["Написать новое сообщение"],
         ["Прочитать свои сообщения"],
         ["Политика конфиденциальности"],
         ["Обратная связь"],
     ]
-    if is_architect_username(username):
+    if user_id == ARCHITECT_USER_ID:
         buttons.append(["Архитектор"])
-    if is_nastavnik_username(username):
-        buttons.append(["Наставник"])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 # Возврат клавиатуры для шага ввода
@@ -258,8 +242,6 @@ async def send_emergency_now(
 ) -> None:
     if not ALERT_CHAT_ID:
         raise RuntimeError("ALERT_CHAT_ID is not set")
-    username_text = f"@{user.username}" if user and user.username else "-"
-    full_name = " ".join(x for x in [(user.first_name if user else ""), (user.last_name if user else "")] if x) or "Пользователь"
     created_text = format_api_datetime(recorded.get("timecreated"))
     mode_text = "РЕЖИМ: ТЕСТОВЫЙ (все периоды по 1 минуте)\n\n" if is_test_period_message(recorded) else ""
     alert_text = (
@@ -267,8 +249,7 @@ async def send_emergency_now(
         f"{mode_text}"
         f"ID сообщения: {recorded.get('id')}\n"
         f"User id: {user.id if user else '-'}\n"
-        f"Username: {username_text}\n"
-        f"Имя: {full_name}\n\n"
+        "\n"
         f"Время создания сообщения: {created_text}\n\n"
         f"Текст сообщения:\n{recorded.get('message', '')}\n\n"
         f"Ответ пользователя:\n{response_text}"
@@ -299,13 +280,13 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
                 f"id сообщения: {recorded.get('id')}\n"
                 f"Время создания: {created_text}\n"
                 f"Ваш ответ: {text}",
-                reply_markup=main_menu_keyboard(user.username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
         except Exception:
             logger.exception("Failed to send immediate emergency alert")
             await update.message.reply_text(
                 "Ответ на проверку сохранен, но аварийное сообщение пока не отправилось.",
-                reply_markup=main_menu_keyboard(user.username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
         return True
     await update.message.reply_text(
@@ -313,7 +294,7 @@ async def try_submit_check_response(update: Update, context: ContextTypes.DEFAUL
         "Бот прекращает следить за этим сообщением.\n\n"
         f"Время создания: {created_text}\n"
         f"Исходное сообщение: {recorded.get('message', '')}\n",
-        reply_markup=main_menu_keyboard(user.username),
+        reply_markup=main_menu_keyboard(user.id if user else None),
     )
     return True
 
@@ -325,7 +306,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     first_name = (user.first_name if user else None) or "<Ваше имя не распознано>"
     await update.message.reply_text(
         start_text(first_name),
-        reply_markup=main_menu_keyboard(user.username if user else None),
+        reply_markup=main_menu_keyboard(user.id if user else None),
     )
 
 # Отправка текста политики конфиденциальности
@@ -333,14 +314,14 @@ async def privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     await update.message.reply_text(
         read_privacy_policy_text(),
-        reply_markup=main_menu_keyboard(user.username if user else None),
+        reply_markup=main_menu_keyboard(user.id if user else None),
     )
 
 # Показ пользователю списка его сообщений
 async def show_user_messages(update: Update) -> None:
     user = update.effective_user
     if not user:
-        await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard())
+        await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(user.id if user else None))
         return
     try:
         response = api_get("/api/messages", params={"user_id": user.id})
@@ -350,12 +331,12 @@ async def show_user_messages(update: Update) -> None:
         if not items:
             await update.message.reply_text(
                 "У вас пока нет сохраненных сообщений.",
-                reply_markup=main_menu_keyboard(user.username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
             return
         await update.message.reply_text(
             f"Ваши сообщения ({len(items)}):",
-            reply_markup=main_menu_keyboard(user.username),
+            reply_markup=main_menu_keyboard(user.id if user else None),
         )
         for idx, item in enumerate(items, start=1):
             tracking = message_tracking_status(item)
@@ -371,10 +352,10 @@ async def show_user_messages(update: Update) -> None:
         logger.exception("Failed to load messages")
         await update.message.reply_text(
             "Не удалось прочитать сообщения из базы.",
-            reply_markup=main_menu_keyboard(user.username),
+            reply_markup=main_menu_keyboard(user.id if user else None),
         )
 
-# Формирование сводки архитектора по данным админки
+
 def build_architect_summary(overview: dict) -> str:
     total = int(overview.get("total_messages") or 0)
     active = int(overview.get("active_checks") or 0)
@@ -392,14 +373,13 @@ def build_architect_summary(overview: dict) -> str:
         f"Check3 SENT: {int(overview.get('check3_sent') or 0)}"
     )
 
-# Отправка сводки архитектора для привилегированного пользователя
+
 async def show_architect_summary(update: Update) -> None:
     user = update.effective_user
-    username = user.username if user else None
-    if not is_architect_username(username):
+    if not user or user.id != ARCHITECT_USER_ID:
         await update.message.reply_text(
             "Команда недоступна",
-            reply_markup=main_menu_keyboard(username),
+            reply_markup=main_menu_keyboard(user.id if user else None),
         )
         return
     try:
@@ -408,61 +388,26 @@ async def show_architect_summary(update: Update) -> None:
             raise RuntimeError(f"api status {response.status_code}")
         await update.message.reply_text(
             build_architect_summary(response.json()),
-            reply_markup=main_menu_keyboard(username),
+            reply_markup=main_menu_keyboard(user.id),
         )
-        readme_text = read_readme_text()
-        await update.message.reply_text(readme_text, reply_markup=main_menu_keyboard(username))
     except Exception:
         logger.exception("Failed to load architect summary")
         await update.message.reply_text(
             "Не удалось получить отчет архитектора",
-            reply_markup=main_menu_keyboard(username),
-        )
-
-# Показ содержимого README для наставника
-async def show_nastavnik_readme(update: Update) -> None:
-    user = update.effective_user
-    username = user.username if user else None
-    if not is_nastavnik_username(username):
-        await update.message.reply_text(
-            "Команда недоступна",
-            reply_markup=main_menu_keyboard(username),
-        )
-        return
-    try:
-        readme_text = read_readme_text()
-        await update.message.reply_text(
-            "Здравствуйте, Руслан!\n\nОтправляю содержимое README-файла.",
-            reply_markup=main_menu_keyboard(username),
-        )
-        await update.message.reply_text(readme_text, reply_markup=main_menu_keyboard(username))
-    except Exception:
-        logger.exception("Failed to send nastavnik readme")
-        await update.message.reply_text(
-            "Не удалось прочитать README",
-            reply_markup=main_menu_keyboard(username),
+            reply_markup=main_menu_keyboard(user.id),
         )
 
 # Обработка текстовых сообщений пользователя
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ensure_state(context)
     user = update.effective_user
-    username = user.username if user else None
     text = (update.message.text or "").strip()
     state = context.user_data.get(STATE_KEY, STATE_IDLE)
     is_ok_phrase = is_ok_text(text)
     if text == "Назад в главное меню":
         context.user_data[STATE_KEY] = STATE_IDLE
         context.user_data.pop(DRAFT_MESSAGE_KEY, None)
-        await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard(username))
-        return
-    if text == "Архитектор":
-        context.user_data[STATE_KEY] = STATE_IDLE
-        await show_architect_summary(update)
-        return
-    if text == "Наставник":
-        context.user_data[STATE_KEY] = STATE_IDLE
-        await show_nastavnik_readme(update)
+        await update.message.reply_text("Главное меню:", reply_markup=main_menu_keyboard(user.id if user else None))
         return
     if text == "Написать новое сообщение":
         context.user_data[STATE_KEY] = STATE_WAIT_MESSAGE
@@ -476,6 +421,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == "Политика конфиденциальности":
         context.user_data[STATE_KEY] = STATE_IDLE
         await privacy(update, context)
+        return
+    if text == "Архитектор":
+        context.user_data[STATE_KEY] = STATE_IDLE
+        await show_architect_summary(update)
         return
     if text == "Обратная связь":
         context.user_data[STATE_KEY] = STATE_WAIT_FEEDBACK
@@ -492,14 +441,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     return
                 await update.message.reply_text(
                     "Нет активной проверки для подтверждения.",
-                    reply_markup=main_menu_keyboard(username),
+                    reply_markup=main_menu_keyboard(user.id if user else None),
                 )
                 return
             except Exception:
                 logger.exception("Failed to submit check response")
                 await update.message.reply_text(
                     "Не удалось обработать ответ.",
-                    reply_markup=main_menu_keyboard(username),
+                    reply_markup=main_menu_keyboard(user.id if user else None),
                 )
                 return
         try:
@@ -510,12 +459,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             logger.exception("Failed to submit check response")
             await update.message.reply_text(
                 "Не удалось отправить ответ на проверку.",
-                reply_markup=main_menu_keyboard(username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
             return
     if state == STATE_WAIT_MESSAGE:
         if not user:
-            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(username))
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(user.id if user else None))
             context.user_data[STATE_KEY] = STATE_IDLE
             return
         if not text:
@@ -532,7 +481,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
     if state == STATE_WAIT_FIRST_PERIOD:
         if not user:
-            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(username))
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(user.id if user else None))
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
             return
@@ -545,7 +494,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             context.user_data[STATE_KEY] = STATE_IDLE
             await update.message.reply_text(
                 "Текст сообщения не найден. Введите сообщение заново.",
-                reply_markup=main_menu_keyboard(username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
             return
         try:
@@ -555,9 +504,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 "/api/messages",
                 {
                     "user_id": user.id,
-                    "username": user.username,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
                     "message": draft_message,
                     "message_mode": message_mode,
                     "check1_delay_seconds": check1_delay,
@@ -569,21 +515,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 raise RuntimeError(f"api status {response.status_code}")
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
-            sender_username = f"@{user.username}" if user.username else "-"
-            sender_name = " ".join(x for x in [user.first_name, user.last_name] if x) or "Пользователь"
             await update.message.reply_text(
                 "Сообщение сохранено.\n\n"
                 f"Текст: {draft_message}\n"
-                f"Отправитель: {sender_name} (username: {sender_username}, id: {user.id})\n"
+                f"Отправитель: id {user.id}\n"
                 f"Время отправки: {sent_at.astimezone(MOSCOW_TZ).strftime('%d.%m.%Y %H:%M:%S')}",
-                reply_markup=main_menu_keyboard(username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
             return
         except Exception:
             logger.exception("Failed to create message")
             await update.message.reply_text(
                 "Не удалось сохранить сообщение в базу.",
-                reply_markup=main_menu_keyboard(username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
@@ -591,7 +535,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if state == STATE_WAIT_FEEDBACK:
         if not user:
             context.user_data[STATE_KEY] = STATE_IDLE
-            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(username))
+            await update.message.reply_text("Не удалось определить пользователя.", reply_markup=main_menu_keyboard(user.id if user else None))
             return
         if not text:
             await update.message.reply_text("Пустой текст. Напишите ваше сообщение.")
@@ -606,16 +550,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             context.user_data[STATE_KEY] = STATE_IDLE
             await update.message.reply_text(
                 "Спасибо за обратную связь! Ваше сообщение будет рассмотрено.",
-                reply_markup=main_menu_keyboard(username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
         except Exception:
             logger.exception("Failed to submit feedback")
             await update.message.reply_text(
                 "Не удалось отправить сообщение. Попробуйте позже.",
-                reply_markup=main_menu_keyboard(username),
+                reply_markup=main_menu_keyboard(user.id if user else None),
             )
         return
-    await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard(username))
+    await update.message.reply_text("Используйте кнопки меню.", reply_markup=main_menu_keyboard(user.id if user else None))
 
 # Обработка нажатий inline кнопок
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

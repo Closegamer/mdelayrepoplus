@@ -46,8 +46,6 @@ def _send_escalation(row) -> bool:
     if not settings.alert_chat_id:
         logger.warning("ALERT_CHAT_ID is not set, skip escalation")
         return False
-    username_text = f"@{escape(str(row.username))}" if row.username else "-"
-    user_title = " ".join(x for x in [row.firstname, row.lastname] if x) or "Пользователь"
     created_text = escape(str(row.timecreated))
     source_message = escape(str(row.message or ""))
     is_test_mode = row.message_mode == "Тестовый" or (
@@ -61,8 +59,6 @@ def _send_escalation(row) -> bool:
         f"{mode_text}"
         f"ID сообщения: {row.id}\n"
         f"User id: {row.userid}\n"
-        f"Username: {username_text}\n\n"
-        f"Имя: {escape(user_title)}\n\n"
         f"Время создания сообщения: {created_text}\n\n"
         f"Текст сообщения:\n{source_message}"
     )

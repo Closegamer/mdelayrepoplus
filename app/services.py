@@ -56,9 +56,6 @@ def _is_ok_response(value: str) -> bool:
 def create_message(
     db: Session,
     user_id: int,
-    username: str | None,
-    first_name: str | None,
-    last_name: str | None,
     message_text: str,
     message_mode: str | None = None,
     check1_delay_seconds: int | None = None,
@@ -67,9 +64,6 @@ def create_message(
 ) -> Message:
     obj = Message(
         userid=user_id,
-        username=username,
-        firstname=first_name,
-        lastname=last_name,
         message=message_text,
         message_mode=message_mode or "Реальный",
         check1_delay_seconds=check1_delay_seconds or settings.check1_seconds,

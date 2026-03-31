@@ -7,9 +7,6 @@ class Message(Base):
     __tablename__ = "messages"
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     userid: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
-    username: Mapped[str | None] = mapped_column(Text, nullable=True)
-    firstname: Mapped[str | None] = mapped_column(Text, nullable=True)
-    lastname: Mapped[str | None] = mapped_column(Text, nullable=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     message_mode: Mapped[str] = mapped_column(Text, nullable=False, default="Реальный", server_default="Реальный")
     timecreated: Mapped[datetime] = mapped_column(
