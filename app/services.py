@@ -52,6 +52,54 @@ def _is_ok_response(value: str) -> bool:
     compacted = normalized.replace(" ", "")
     return compacted in OK_NORMALIZED_VARIANTS
 
+
+def _active_check_no_and_deadline_seconds(pending: Message) -> tuple[int, int] | None:
+    if pending.check3_res == SENT_TEXT:
+        return 3, int(pending.check3_delay_seconds or 0)
+    if pending.check2_res == SENT_TEXT:
+        return 2, int(pending.check3_delay_seconds or 0)
+    if pending.check1_res == SENT_TEXT:
+        return 1, int(pending.check2_delay_seconds or 0)
+    return None
+
+
+def _active_check_time(pending: Message, check_no: int) -> datetime | None:
+    if check_no == 3:
+        return _dt_aware(pending.check3_time)
+    if check_no == 2:
+        return _dt_aware(pending.check2_time)
+    if check_no == 1:
+        return _dt_aware(pending.check1_time)
+    return None
+
+
+def _latest_active_pending_within_deadline(db: Session, user_id: int) -> tuple[Message, int, int] | None:
+    pending = (
+        db.query(Message)
+        .filter(
+            Message.userid == user_id,
+            Message.check1_time.is_not(None),
+            ((Message.check1_res == SENT_TEXT) | (Message.check2_res == SENT_TEXT) | (Message.check3_res == SENT_TEXT)),
+        )
+        .order_by(Message.id.desc())
+        .first()
+    )
+    if not pending:
+        return None
+    active_meta = _active_check_no_and_deadline_seconds(pending)
+    if not active_meta:
+        return None
+    check_no, deadline_seconds = active_meta
+    if deadline_seconds <= 0:
+        return None
+    check_time = _active_check_time(pending, check_no)
+    if not check_time:
+        return None
+    now = datetime.now(timezone.utc)
+    if (now - check_time).total_seconds() >= deadline_seconds:
+        return None
+    return pending, check_no, deadline_seconds
+
 # Создание нового сообщения для отслеживания
 def create_message(
     db: Session,
@@ -93,29 +141,14 @@ def delete_message_by_id(db: Session, message_id: int) -> bool:
 
 # Сохранение ответа пользователя в текущий активный этап проверки
 def submit_response(db: Session, user_id: int, response_text: str) -> Message | None:
-    pending = (
-        db.query(Message)
-        .filter(
-            Message.userid == user_id,
-            Message.check1_time.is_not(None),
-            ((Message.check1_res == SENT_TEXT) | (Message.check2_res == SENT_TEXT) | (Message.check3_res == SENT_TEXT)),
-        )
-        .order_by(Message.id.desc())
-        .first()
-    )
-    if not pending:
+    active = _latest_active_pending_within_deadline(db, user_id)
+    if not active:
         return None
+    pending, active_check_no, _ = active
     answer = response_text.strip()
     is_ok = _is_ok_response(answer)
     value = OK_TEXT if is_ok else answer
     pending.user_response_text = answer
-    active_check_no = 0
-    if pending.check3_res == SENT_TEXT:
-        active_check_no = 3
-    elif pending.check2_res == SENT_TEXT:
-        active_check_no = 2
-    elif pending.check1_res == SENT_TEXT:
-        active_check_no = 1
     if active_check_no == 1:
         pending.check1_res = value
         pending.check1_is_text = True
@@ -136,29 +169,10 @@ def submit_response(db: Session, user_id: int, response_text: str) -> Message | 
 
 # Возврат данных об активной проверке пользователя
 def get_active_check_for_user(db: Session, user_id: int) -> dict | None:
-    pending = (
-        db.query(Message)
-        .filter(
-            Message.userid == user_id,
-            Message.check1_time.is_not(None),
-            ((Message.check1_res == SENT_TEXT) | (Message.check2_res == SENT_TEXT) | (Message.check3_res == SENT_TEXT)),
-        )
-        .order_by(Message.id.desc())
-        .first()
-    )
-    if not pending:
+    active = _latest_active_pending_within_deadline(db, user_id)
+    if not active:
         return None
-    if pending.check3_res == SENT_TEXT:
-        check_no = 3
-        deadline = pending.check3_delay_seconds
-    elif pending.check2_res == SENT_TEXT:
-        check_no = 2
-        deadline = pending.check3_delay_seconds
-    elif pending.check1_res == SENT_TEXT:
-        check_no = 1
-        deadline = pending.check2_delay_seconds
-    else:
-        return None
+    pending, check_no, deadline = active
     return {
         "message_id": pending.id,
         "check_no": check_no,
