@@ -11,7 +11,6 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000")
 TIMEOUT_SECONDS = 15
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 LOGIN_TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
-ARCHITECT_USER_ID = 227287028
 
 # Создание токена авторизации для сохранения входа
 def make_login_token(password: str, timestamp: int | None = None) -> str:
@@ -56,8 +55,6 @@ def ensure_auth_state() -> None:
         st.session_state.logged_in = False
     if "admin_password" not in st.session_state:
         st.session_state.admin_password = ADMIN_PASSWORD
-    if "admin_user_id" not in st.session_state:
-        st.session_state.admin_user_id = ARCHITECT_USER_ID
     configured_password = st.session_state.get("admin_password", "")
     auth_token = st.query_params.get("auth", "")
     if is_login_token_valid(configured_password, auth_token):
@@ -73,12 +70,6 @@ def render_login() -> bool:
     with center:
         with st.form("admin_login_form", clear_on_submit=False):
             st.text_input(
-                "Telegram ID",
-                placeholder="Введите ваш Telegram ID",
-                label_visibility="collapsed",
-                key="admin_user_id_input",
-            )
-            st.text_input(
                 "Пароль администратора",
                 type="password",
                 placeholder="Стой, кто идет? Нужен пароль!",
@@ -89,18 +80,11 @@ def render_login() -> bool:
         if submitted:
             entered_password = st.session_state.get("admin_password_input", "")
             configured_password = st.session_state.get("admin_password", "")
-            entered_user_id_raw = (st.session_state.get("admin_user_id_input", "") or "").strip()
-            configured_user_id = int(st.session_state.get("admin_user_id", ARCHITECT_USER_ID))
-            entered_user_id = int(entered_user_id_raw) if entered_user_id_raw.isdigit() else -1
-            if (
-                entered_password == configured_password
-                and configured_password
-                and entered_user_id == configured_user_id
-            ):
+            if entered_password == configured_password and configured_password:
                 st.session_state.logged_in = True
                 st.query_params["auth"] = make_login_token(configured_password)
                 st.rerun()
-            st.error("Доступ запрещен: неверный Telegram ID или пароль.")
+            st.error("Доступ запрещен: неверный пароль.")
     return st.session_state.logged_in
 
 # Рендер блока основных метрик

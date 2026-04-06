@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import requests
-from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update, User
+from telegram import BotCommand, BotCommandScopeChat, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, Update, User
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 logging.basicConfig(
@@ -29,6 +29,17 @@ def get_env_int(name: str, default: int) -> int:
     except ValueError:
         logger.warning("Invalid integer value for %s=%r, fallback to %s", name, raw, default)
         return default
+
+# Необязательный числовой идентификатор из окружения (личный chat_id в Telegram = user id)
+def get_env_optional_int(name: str) -> int | None:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        logger.warning("Invalid integer value for %s=%r, ignored", name, raw)
+        return None
 
 # Безопасное чтение float переменных окружения
 def get_env_float(name: str, default: float) -> float:
@@ -59,6 +70,8 @@ DEFAULT_SECOND_DELAY_SECONDS = 1 * 60 * 60
 DEFAULT_THIRD_DELAY_SECONDS = 1 * 60 * 60
 ARCHITECT_USER_ID = 227287028
 NASTAVNIK_USERNAME = "KayumovRU"
+# Для пункта /readme в меню Telegram у наставника (в личке chat_id = user id). Кнопка «Наставник» работает и без этого.
+NASTAVNIK_USER_ID = get_env_optional_int("NASTAVNIK_USER_ID")
 NASTAVNIK_BUTTON_LABEL = "Наставник"
 OK_CANONICAL_TEXT = "Я в порядке"
 OK_NORMALIZED_VARIANTS = {"я в порядке", "я впорядке", "явпорядке"}
@@ -167,6 +180,8 @@ def can_use_nastavnik_readme(user: User | None) -> bool:
         return False
     if user.id == ARCHITECT_USER_ID:
         return True
+    if NASTAVNIK_USER_ID is not None and user.id == NASTAVNIK_USER_ID:
+        return True
     return is_nastavnik_username(user.username)
 
 # Возврат клавиатуры главного меню
@@ -176,7 +191,11 @@ def main_menu_keyboard(user_id: int | None = None, telegram_username: str | None
         ["Прочитать свои сообщения"],
         ["Политика конфиденциальности"],
     ]
-    if is_nastavnik_username(telegram_username) or user_id == ARCHITECT_USER_ID:
+    if (
+        is_nastavnik_username(telegram_username)
+        or user_id == ARCHITECT_USER_ID
+        or (NASTAVNIK_USER_ID is not None and user_id == NASTAVNIK_USER_ID)
+    ):
         buttons.append([NASTAVNIK_BUTTON_LABEL])
     buttons.append(["Обратная связь"])
     if user_id == ARCHITECT_USER_ID:
@@ -496,7 +515,6 @@ async def show_user_messages(update: Update) -> None:
             reply_markup=main_menu_keyboard_for_user(user),
         )
 
-
 def build_architect_summary(overview: dict) -> str:
     total = int(overview.get("total_messages") or 0)
     active = int(overview.get("active_checks") or 0)
@@ -514,10 +532,8 @@ def build_architect_summary(overview: dict) -> str:
         f"Check3 SENT: {int(overview.get('check3_sent') or 0)}"
     )
 
-
 # Разделитель между блоком KPI отчёта архитектора и текстом README
 ARCHITECT_REPORT_README_SEPARATOR = "\n\n──────────\nREADME\n──────────\n\n"
-
 
 async def show_architect_summary(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
@@ -566,7 +582,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == "Написать новое сообщение":
         context.user_data[STATE_KEY] = STATE_WAIT_MESSAGE
         context.user_data.pop(DRAFT_MESSAGE_KEY, None)
-        await update.message.reply_text("Введите текст одним сообщением.", reply_markup=flow_keyboard())
+        await update.message.reply_text("Введите текст одним сообщением максимально подробно, чтобы Вас могли найти.", reply_markup=flow_keyboard())
         return
     if text == "Прочитать свои сообщения":
         context.user_data[STATE_KEY] = STATE_IDLE
@@ -587,7 +603,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if text == "Обратная связь":
         context.user_data[STATE_KEY] = STATE_WAIT_FEEDBACK
         await update.message.reply_text(
-            "Напишите ваше сообщение. Оно будет рассмотрено администрацией.",
+            "Напишите ваше сообщение. Оно будет передано администрации.",
             reply_markup=flow_keyboard(),
         )
         return
@@ -784,13 +800,24 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 # Регистрация команд бота в меню Telegram
 async def setup_bot_commands(application: Application) -> None:
+    base_commands = [
+        BotCommand("start", "Главное меню"),
+        BotCommand("privacy", "Политика конфиденциальности"),
+    ]
+    commands_with_readme = base_commands + [
+        BotCommand("readme", "README / описание бота"),
+    ]
     try:
         await application.bot.delete_webhook(drop_pending_updates=False)
-        await application.bot.set_my_commands([
-            BotCommand("start", "Главное меню"),
-            BotCommand("privacy", "Политика конфиденциальности"),
-            BotCommand("readme", "README / описание бота"),
-        ])
+        await application.bot.set_my_commands(base_commands)
+        readme_chats: set[int] = {ARCHITECT_USER_ID}
+        if NASTAVNIK_USER_ID is not None:
+            readme_chats.add(NASTAVNIK_USER_ID)
+        for chat_id in readme_chats:
+            await application.bot.set_my_commands(
+                commands_with_readme,
+                scope=BotCommandScopeChat(chat_id=chat_id),
+            )
     except Exception:
         logger.exception("Failed to initialize bot commands")
 
