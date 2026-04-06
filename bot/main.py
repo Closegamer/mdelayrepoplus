@@ -16,6 +16,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Лимит длины одного текстового сообщения в Telegram API
+TELEGRAM_MESSAGE_MAX_CHARS = 4096
+
 # Безопасное чтение числовых переменных окружения для конфигурации polling
 def get_env_int(name: str, default: int) -> int:
     raw = os.getenv(name)
@@ -107,6 +110,32 @@ def api_delete(path: str, params: dict | None = None) -> requests.Response:
 def read_privacy_policy_text() -> str:
     policy_path = Path(__file__).resolve().parents[1] / "PRIVACY_POLICY.md"
     return policy_path.read_text(encoding="utf-8")
+
+# Разбиение длинного текста на части по лимиту Telegram (без обрезки посередине абзаца, где возможно)
+def split_text_for_telegram(text: str, max_len: int = TELEGRAM_MESSAGE_MAX_CHARS) -> list[str]:
+    text = text.strip()
+    if not text:
+        return [""]
+    if len(text) <= max_len:
+        return [text]
+    chunks: list[str] = []
+    rest = text
+    while rest:
+        if len(rest) <= max_len:
+            chunks.append(rest)
+            break
+        cut = rest.rfind("\n\n", 0, max_len)
+        if cut == -1:
+            cut = rest.rfind("\n", 0, max_len)
+        if cut == -1 or cut < max_len // 2:
+            cut = max_len
+        chunk = rest[:cut].strip()
+        if not chunk:
+            chunk = rest[:max_len].rstrip()
+            cut = max_len
+        chunks.append(chunk)
+        rest = rest[cut:].lstrip()
+    return chunks
 
 # Возврат клавиатуры главного меню
 def main_menu_keyboard(user_id: int | None = None) -> ReplyKeyboardMarkup:
@@ -319,10 +348,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # Отправка текста политики конфиденциальности
 async def privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
-    await update.message.reply_text(
-        read_privacy_policy_text(),
-        reply_markup=main_menu_keyboard(user.id if user else None),
-    )
+    kb = main_menu_keyboard(user.id if user else None)
+    message = update.message
+    if not message:
+        return
+    try:
+        body = read_privacy_policy_text()
+    except FileNotFoundError:
+        logger.exception("Privacy policy file not found")
+        await message.reply_text(
+            "Не удалось загрузить текст политики (файл на сервере не найден). Обратитесь к администратору.",
+            reply_markup=kb,
+        )
+        return
+    except OSError as exc:
+        logger.exception("Privacy policy read failed: %s", exc)
+        await message.reply_text(
+            "Не удалось прочитать политику конфиденциальности. Попробуйте позже.",
+            reply_markup=kb,
+        )
+        return
+    parts = split_text_for_telegram(body)
+    await message.reply_text(parts[0], reply_markup=kb)
+    chat = update.effective_chat
+    if chat and len(parts) > 1:
+        for part in parts[1:]:
+            await context.bot.send_message(chat_id=chat.id, text=part)
 
 # Показ пользователю списка его сообщений
 async def show_user_messages(update: Update) -> None:
