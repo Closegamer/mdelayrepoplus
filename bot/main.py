@@ -111,6 +111,17 @@ def read_privacy_policy_text() -> str:
     policy_path = Path(__file__).resolve().parents[1] / "PRIVACY_POLICY.md"
     return policy_path.read_text(encoding="utf-8")
 
+# Фрагменты **заголовок** в файле политики преобразуются в Telegram HTML (<b>)
+def privacy_policy_source_to_telegram_html(text: str) -> str:
+    parts = re.split(r"\*\*(.+?)\*\*", text)
+    out: list[str] = []
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            out.append(escape(part))
+        else:
+            out.append(f"<b>{escape(part)}</b>")
+    return "".join(out)
+
 # Разбиение длинного текста на части по лимиту Telegram (без обрезки посередине абзаца, где возможно)
 def split_text_for_telegram(text: str, max_len: int = TELEGRAM_MESSAGE_MAX_CHARS) -> list[str]:
     text = text.strip()
@@ -368,12 +379,14 @@ async def privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             reply_markup=kb,
         )
         return
-    parts = split_text_for_telegram(body)
-    await message.reply_text(parts[0], reply_markup=kb)
+    html_body = privacy_policy_source_to_telegram_html(body)
+    parts = split_text_for_telegram(html_body)
+    parse_kw = {"parse_mode": "HTML"}
+    await message.reply_text(parts[0], reply_markup=kb, **parse_kw)
     chat = update.effective_chat
     if chat and len(parts) > 1:
         for part in parts[1:]:
-            await context.bot.send_message(chat_id=chat.id, text=part)
+            await context.bot.send_message(chat_id=chat.id, text=part, **parse_kw)
 
 # Показ пользователю списка его сообщений
 async def show_user_messages(update: Update) -> None:
