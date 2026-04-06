@@ -78,7 +78,7 @@ LATIN_TO_CYRILLIC_SIMILAR = str.maketrans(
 def start_text(first_name: str) -> str:
     safe_first_name = escape(first_name)
     return (
-        f"Вас приветствует бот KakDelaTorBot!\n\n"
+        f"Здравствуйте, {safe_first_name}! Вас приветствует бот KakDelaTorBot!\n\n"
         "Если Вы собираетесь в опасное путешествие или в подозрительное место, "
         "Вы можете оставить сообщение, которое поможет Вас найти в случае непредвиденной ситуации "
         "или при отсутствии у Вас связи.\n\n"
@@ -244,11 +244,18 @@ async def send_emergency_now(
         raise RuntimeError("ALERT_CHAT_ID is not set")
     created_text = format_api_datetime(recorded.get("timecreated"))
     mode_text = "РЕЖИМ: ТЕСТОВЫЙ (все периоды по 1 минуте)\n\n" if is_test_period_message(recorded) else ""
+    un = (user.username if user else None) or None
+    fn = (user.first_name if user else None) or "-"
+    ln = (user.last_name if user else None) or "-"
+    username_line = f"Username: @{un}\n" if un else "Username: -\n"
     alert_text = (
         "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
         f"{mode_text}"
         f"ID сообщения: {recorded.get('id')}\n"
         f"User id: {user.id if user else '-'}\n"
+        f"{username_line}"
+        f"Имя: {fn}\n"
+        f"Фамилия: {ln}\n"
         "\n"
         f"Время создания сообщения: {created_text}\n\n"
         f"Текст сообщения:\n{recorded.get('message', '')}\n\n"
@@ -341,8 +348,15 @@ async def show_user_messages(update: Update) -> None:
         for idx, item in enumerate(items, start=1):
             tracking = message_tracking_status(item)
             result = message_result_status(item)
+            un_item = item.get("username")
+            un_item_disp = f"@{un_item}" if un_item else "-"
+            fn_item = item.get("first_name") or "-"
+            ln_item = item.get("last_name") or "-"
             text = (
                 f"{idx}. Текст: {item.get('message', '')}\n"
+                f"Username: {un_item_disp}\n"
+                f"Имя: {fn_item}\n"
+                f"Фамилия: {ln_item}\n"
                 f"Время отправки: {format_api_datetime(item.get('timecreated'))}\n"
                 f"Слежение: {tracking}\n"
                 f"Результат: {result}"
@@ -506,6 +520,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     "user_id": user.id,
                     "message": draft_message,
                     "message_mode": message_mode,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
                     "check1_delay_seconds": check1_delay,
                     "check2_delay_seconds": check2_delay,
                     "check3_delay_seconds": check3_delay,
@@ -515,10 +532,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 raise RuntimeError(f"api status {response.status_code}")
             context.user_data[STATE_KEY] = STATE_IDLE
             context.user_data.pop(DRAFT_MESSAGE_KEY, None)
+            un_disp = f"@{user.username}" if user.username else "-"
+            fn_disp = user.first_name or "-"
+            ln_disp = user.last_name or "-"
             await update.message.reply_text(
                 "Сообщение сохранено.\n\n"
                 f"Текст: {draft_message}\n"
                 f"Отправитель: id {user.id}\n"
+                f"Username: {un_disp}\n"
+                f"Имя: {fn_disp}\n"
+                f"Фамилия: {ln_disp}\n"
                 f"Время отправки: {sent_at.astimezone(MOSCOW_TZ).strftime('%d.%m.%Y %H:%M:%S')}",
                 reply_markup=main_menu_keyboard(user.id if user else None),
             )

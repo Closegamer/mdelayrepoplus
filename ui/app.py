@@ -185,10 +185,14 @@ def map_table_rows(rows: list[dict]) -> list[dict]:
     for item in rows:
         tracking = row_tracking_status(item)
         result = row_result_status(item)
+        un = item.get("username")
         mapped.append(
             {
                 "ID": item.get("id"),
                 "UserID": item.get("user_id"),
+                "Username": f"@{un}" if un else "-",
+                "Имя": item.get("first_name") or "-",
+                "Фамилия": item.get("last_name") or "-",
                 "Режим": item.get("message_mode") or "Реальный",
                 "Сообщение": item.get("message") or "",
                 "Создано": format_created_at(item.get("timecreated")),

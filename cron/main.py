@@ -54,11 +54,18 @@ def _send_escalation(row) -> bool:
         and int(getattr(row, "check3_delay_seconds", 0) or 0) == 60
     )
     mode_text = "РЕЖИМ: ТЕСТОВЫЙ (все периоды по 1 минуте)\n\n" if is_test_mode else ""
+    un = getattr(row, "username", None) or None
+    fn = getattr(row, "firstname", None) or "-"
+    ln = getattr(row, "lastname", None) or "-"
+    username_line = f"Username: @{escape(un)}\n" if un else "Username: -\n"
     text = (
         "АВАРИЙНОЕ СООБЩЕНИЕ\n\n"
         f"{mode_text}"
         f"ID сообщения: {row.id}\n"
         f"User id: {row.userid}\n"
+        f"{username_line}"
+        f"Имя: {escape(fn)}\n"
+        f"Фамилия: {escape(ln)}\n"
         f"Время создания сообщения: {created_text}\n\n"
         f"Текст сообщения:\n{source_message}"
     )

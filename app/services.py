@@ -106,12 +106,18 @@ def create_message(
     user_id: int,
     message_text: str,
     message_mode: str | None = None,
+    username: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
     check1_delay_seconds: int | None = None,
     check2_delay_seconds: int | None = None,
     check3_delay_seconds: int | None = None,
 ) -> Message:
     obj = Message(
         userid=user_id,
+        username=username,
+        firstname=first_name,
+        lastname=last_name,
         message=message_text,
         message_mode=message_mode or "Реальный",
         check1_delay_seconds=check1_delay_seconds or settings.check1_seconds,

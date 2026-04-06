@@ -48,9 +48,9 @@ def startup() -> None:
     Base.metadata.create_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS user_contacts"))
-        conn.execute(text("ALTER TABLE messages DROP COLUMN IF EXISTS username"))
-        conn.execute(text("ALTER TABLE messages DROP COLUMN IF EXISTS firstname"))
-        conn.execute(text("ALTER TABLE messages DROP COLUMN IF EXISTS lastname"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS username TEXT"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS firstname TEXT"))
+        conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS lastname TEXT"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_mode TEXT NOT NULL DEFAULT 'Реальный'"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check1_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
         conn.execute(text("ALTER TABLE messages ADD COLUMN IF NOT EXISTS check2_delay_seconds INTEGER NOT NULL DEFAULT 3600"))
@@ -69,6 +69,9 @@ def _to_out(item: Message) -> MessageOut:
     return MessageOut(
         id=item.id,
         user_id=item.userid,
+        username=item.username,
+        first_name=item.firstname,
+        last_name=item.lastname,
         message=item.message,
         message_mode=item.message_mode,
         timecreated=item.timecreated,
@@ -96,6 +99,9 @@ def create_message_endpoint(payload: MessageCreate, db: Session = Depends(get_db
         user_id=payload.user_id,
         message_text=payload.message,
         message_mode=payload.message_mode,
+        username=payload.username,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
         check1_delay_seconds=payload.check1_delay_seconds,
         check2_delay_seconds=payload.check2_delay_seconds,
         check3_delay_seconds=payload.check3_delay_seconds,
