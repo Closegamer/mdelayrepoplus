@@ -1,4 +1,5 @@
-FROM python:3.12-slim
+# Официальный python:3.12-slim через AWS Public ECR — иной маршрут, чем Docker Hub (часто обходит TLS timeout к auth.docker.io)
+FROM public.ecr.aws/docker/library/python:3.12-slim
 WORKDIR /app
 # Нестабильная сеть / слабый VPS: длинные таймауты и много повторов при скачивании с PyPI
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1

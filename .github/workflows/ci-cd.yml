@@ -168,6 +168,22 @@ jobs:
             export HOST_UID="$(id -u)"
             export HOST_GID="$(id -g)"
 
+            BASE_IMG="public.ecr.aws/docker/library/python:3.12-slim"
+            echo "Предзагрузка базового образа (повтор при сбоях сети/TLS к реестру)..."
+            attempt=0
+            while [ "$attempt" -lt 5 ]; do
+              attempt=$((attempt + 1))
+              if docker pull "$BASE_IMG"; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "WARNING: не удалось предзагрузить $BASE_IMG после 5 попыток" >&2
+              else
+                echo "docker pull попытка $attempt/5 не удалась, пауза 25 с..."
+                sleep 25
+              fi
+            done
+
             if docker compose version >/dev/null 2>&1; then
               if ! docker compose up -d --build --remove-orphans; then
                 echo "ERROR: docker compose up завершился с ошибкой" >&2
