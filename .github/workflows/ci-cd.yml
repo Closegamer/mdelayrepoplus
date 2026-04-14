@@ -100,8 +100,10 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
-          # Сборка на VPS убрана — остаётся git, pull образа, up
-          command_timeout: 20m
+          # Подключение к хосту (не путать с command_timeout): на загруженном VPS 30s по умолчанию может не хватать
+          timeout: 2m
+          # pull + extract образа с GHCR на слабом VPS может занять >20m (см. Run Command Timeout)
+          command_timeout: 60m
           envs: POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,BOT_TOKEN,ALERT_CHAT_ID,ADMIN_PASSWORD,SCHEDULER_POLL_SECONDS,CHECK1_SECONDS,CHECK2_SECONDS,CHECK3_SECONDS,BOT_POLLING_TIMEOUT_SECONDS,BOT_POLLING_READ_TIMEOUT_SECONDS,BOT_POLLING_CONNECT_TIMEOUT_SECONDS,BOT_POLLING_POOL_TIMEOUT_SECONDS,BOT_POLLING_INTERVAL_SECONDS,COMPOSE_PARALLEL_LIMIT,DEPLOY_IMAGE,GHCR_USER,GHCR_READ_TOKEN
           script_stop: true
           script: |
@@ -216,22 +218,26 @@ jobs:
             fi
 
             if docker compose version >/dev/null 2>&1; then
+              echo "=== docker compose pull ==="
               if ! docker compose pull; then
                 echo "ERROR: docker compose pull не удался (образ в GHCR, сеть или права на ghcr.io)" >&2
                 docker compose ps || true
                 exit 1
               fi
+              echo "=== docker compose up -d ==="
               if ! docker compose up -d --remove-orphans; then
                 echo "ERROR: docker compose up завершился с ошибкой" >&2
                 docker compose ps || true
                 exit 1
               fi
             else
+              echo "=== docker-compose pull ==="
               if ! docker-compose pull; then
                 echo "ERROR: docker-compose pull не удался" >&2
                 docker-compose ps || true
                 exit 1
               fi
+              echo "=== docker-compose up -d ==="
               if ! docker-compose up -d --remove-orphans; then
                 echo "ERROR: docker-compose up завершился с ошибкой" >&2
                 docker-compose ps || true
@@ -239,6 +245,7 @@ jobs:
               fi
             fi
 
+            echo "=== docker compose ps (финальный статус) ==="
             if docker compose version >/dev/null 2>&1; then
               docker compose ps
             else
