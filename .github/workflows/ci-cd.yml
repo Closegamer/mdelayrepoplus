@@ -75,10 +75,23 @@ jobs:
               exit 1
             fi
             echo "APP_DIR задан (длина ${#APP_DIR} символов)"
+            APP_DIR="${APP_DIR%/}"
+            parent_dir="$(dirname "$APP_DIR")"
+            # git clone создаёт каталог APP_DIR — нужны права на запись в parent (в /opt у обычного пользователя их нет)
+            if [ ! -d "$APP_DIR" ] && { [ ! -w "$parent_dir" ] || [ ! -x "$parent_dir" ]; }; then
+              echo "ERROR: нельзя создать каталог $APP_DIR — нет прав на родительский каталог $parent_dir." >&2
+              echo "Частый случай: DEPLOY_APP_DIR=/opt/... при пользователе deploy." >&2
+              echo "Вариант A — сменить секрет на каталог в домашней папке, например: /home/$(whoami)/mdelayrepoplus" >&2
+              echo "Вариант B на сервере под root: sudo mkdir -p $APP_DIR && sudo chown $(whoami):$(whoami) $APP_DIR" >&2
+              exit 1
+            fi
 
             if [ ! -d "$APP_DIR/.git" ]; then
-              parent="$(dirname "$APP_DIR")"
-              mkdir -p "$parent"
+              parent="$parent_dir"
+              if ! mkdir -p "$parent"; then
+                echo "ERROR: mkdir -p $parent не удался" >&2
+                exit 1
+              fi
               if [ -d "$APP_DIR" ]; then
                 if [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
                   rmdir "$APP_DIR" 2>/dev/null || {
