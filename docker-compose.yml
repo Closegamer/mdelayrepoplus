@@ -1,3 +1,17 @@
+# Образ приложения собирается в GitHub Actions и пушится в GHCR; на сервере — pull без сборки.
+# Локально: docker compose build / up --build (секция build ниже).
+x-app-base: &app-base
+  image: ${APP_IMAGE:-ghcr.io/closegamer/mdelayrepoplus:main}
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+  env_file:
+    - .env
+  volumes:
+    - .:/app
+
 services:
   db:
     image: postgres:16-alpine
@@ -13,64 +27,32 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-base
     container_name: kakdelatorbot-api
-    restart: unless-stopped
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    env_file:
-      - .env
     depends_on:
       - db
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-    volumes:
-      - .:/app
     ports:
       - "8000:8000"
   bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-base
     container_name: kakdelatorbot-bot
-    restart: unless-stopped
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    env_file:
-      - .env
     depends_on:
       - api
     command: python -m bot.main
-    volumes:
-      - .:/app
   cron:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-base
     container_name: kakdelatorbot-cron
-    restart: unless-stopped
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    env_file:
-      - .env
     depends_on:
       - db
       - api
     command: python -m cron.main
-    volumes:
-      - .:/app
   ui:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app-base
     container_name: kakdelatorbot-ui
-    restart: unless-stopped
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
-    env_file:
-      - .env
     depends_on:
       - api
     command: streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
-    volumes:
-      - .:/app
     ports:
       - "8501:8501"
 

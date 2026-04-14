@@ -28,12 +28,47 @@ jobs:
       - name: Build Docker image
         run: docker build -t kakdelatorbot-app:ci .
 
-  deploy:
+  # Образ с pip-зависимостями собирается на раннере GitHub и пушится в GHCR — VPS только скачивает слой.
+  build-push:
     runs-on: ubuntu-latest
     needs: ci
     if: github.ref == 'refs/heads/main'
-    # Секреты: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PORT, DEPLOY_SSH_KEY (приватный ключ SSH),
-    # DEPLOY_APP_DIR (каталог клона на сервере), GH_REPO_TOKEN (read repo), плюс POSTGRES_*, BOT_*, …
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      app_image: ${{ steps.meta.outputs.full }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Image name (ghcr.io, lowercase)
+        id: meta
+        run: |
+          R=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
+          echo "full=ghcr.io/${R}:main" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        run: |
+          IMG="${{ steps.meta.outputs.full }}"
+          docker build -t "$IMG" -t "${IMG%:main}:${GITHUB_SHA}" .
+          docker push "$IMG"
+          docker push "${IMG%:main}:${GITHUB_SHA}"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-push
+    if: github.ref == 'refs/heads/main'
+    # Секреты: DEPLOY_HOST, DEPLOY_USER, DEPLOY_PORT, DEPLOY_SSH_KEY, DEPLOY_APP_DIR, GH_REPO_TOKEN,
+    # POSTGRES_*, BOT_*, …
+    # Опционально для приватного пакета GHCR: GHCR_USER + GHCR_READ_TOKEN (classic PAT: read:packages).
 
     steps:
       - name: Deploy via SSH
@@ -57,14 +92,17 @@ jobs:
           BOT_POLLING_POOL_TIMEOUT_SECONDS: ${{ secrets.BOT_POLLING_POOL_TIMEOUT_SECONDS }}
           BOT_POLLING_INTERVAL_SECONDS: ${{ secrets.BOT_POLLING_INTERVAL_SECONDS }}
           COMPOSE_PARALLEL_LIMIT: ${{ secrets.COMPOSE_PARALLEL_LIMIT }}
+          DEPLOY_IMAGE: ${{ needs.build-push.outputs.app_image }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
-          # По умолчанию 10m — мало для docker compose --build + pip (numpy/pandas/pyarrow) на медленном VPS
-          command_timeout: 45m
-          envs: POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,BOT_TOKEN,ALERT_CHAT_ID,ADMIN_PASSWORD,SCHEDULER_POLL_SECONDS,CHECK1_SECONDS,CHECK2_SECONDS,CHECK3_SECONDS,BOT_POLLING_TIMEOUT_SECONDS,BOT_POLLING_READ_TIMEOUT_SECONDS,BOT_POLLING_CONNECT_TIMEOUT_SECONDS,BOT_POLLING_POOL_TIMEOUT_SECONDS,BOT_POLLING_INTERVAL_SECONDS,COMPOSE_PARALLEL_LIMIT
+          # Сборка на VPS убрана — остаётся git, pull образа, up
+          command_timeout: 20m
+          envs: POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,BOT_TOKEN,ALERT_CHAT_ID,ADMIN_PASSWORD,SCHEDULER_POLL_SECONDS,CHECK1_SECONDS,CHECK2_SECONDS,CHECK3_SECONDS,BOT_POLLING_TIMEOUT_SECONDS,BOT_POLLING_READ_TIMEOUT_SECONDS,BOT_POLLING_CONNECT_TIMEOUT_SECONDS,BOT_POLLING_POOL_TIMEOUT_SECONDS,BOT_POLLING_INTERVAL_SECONDS,COMPOSE_PARALLEL_LIMIT,DEPLOY_IMAGE,GHCR_USER,GHCR_READ_TOKEN
           script_stop: true
           script: |
             set -e
@@ -163,6 +201,9 @@ jobs:
             write_env BOT_POLLING_CONNECT_TIMEOUT_SECONDS "$BOT_POLLING_CONNECT_TIMEOUT_SECONDS"
             write_env BOT_POLLING_POOL_TIMEOUT_SECONDS "$BOT_POLLING_POOL_TIMEOUT_SECONDS"
             write_env BOT_POLLING_INTERVAL_SECONDS "$BOT_POLLING_INTERVAL_SECONDS"
+            if [ -n "${DEPLOY_IMAGE:-}" ]; then
+              write_env APP_IMAGE "$DEPLOY_IMAGE"
+            fi
 
             # Малый VPS: ограничить параллельную сборку (секрет COMPOSE_PARALLEL_LIMIT или 1).
             export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
@@ -170,30 +211,28 @@ jobs:
             export HOST_UID="$(id -u)"
             export HOST_GID="$(id -g)"
 
-            BASE_IMG="public.ecr.aws/docker/library/python:3.12-slim"
-            echo "Предзагрузка базового образа (повтор при сбоях сети/TLS к реестру)..."
-            attempt=0
-            while [ "$attempt" -lt 5 ]; do
-              attempt=$((attempt + 1))
-              if docker pull "$BASE_IMG"; then
-                break
-              fi
-              if [ "$attempt" -eq 5 ]; then
-                echo "WARNING: не удалось предзагрузить $BASE_IMG после 5 попыток" >&2
-              else
-                echo "docker pull попытка $attempt/5 не удалась, пауза 25 с..."
-                sleep 25
-              fi
-            done
+            if [ -n "${GHCR_READ_TOKEN:-}" ] && [ -n "${GHCR_USER:-}" ]; then
+              echo "$GHCR_READ_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            fi
 
             if docker compose version >/dev/null 2>&1; then
-              if ! docker compose up -d --build --remove-orphans; then
+              if ! docker compose pull; then
+                echo "ERROR: docker compose pull не удался (образ в GHCR, сеть или права на ghcr.io)" >&2
+                docker compose ps || true
+                exit 1
+              fi
+              if ! docker compose up -d --remove-orphans; then
                 echo "ERROR: docker compose up завершился с ошибкой" >&2
                 docker compose ps || true
                 exit 1
               fi
             else
-              if ! docker-compose up -d --build --remove-orphans; then
+              if ! docker-compose pull; then
+                echo "ERROR: docker-compose pull не удался" >&2
+                docker-compose ps || true
+                exit 1
+              fi
+              if ! docker-compose up -d --remove-orphans; then
                 echo "ERROR: docker-compose up завершился с ошибкой" >&2
                 docker-compose ps || true
                 exit 1
