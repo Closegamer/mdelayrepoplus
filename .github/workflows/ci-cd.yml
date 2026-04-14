@@ -70,11 +70,26 @@ jobs:
             REPO_URL="https://x-access-token:${{ secrets.GH_REPO_TOKEN }}@github.com/Closegamer/mdelayrepoplus.git"
 
             if [ ! -d "$APP_DIR/.git" ]; then
-              rm -rf "$APP_DIR"
+              parent="$(dirname "$APP_DIR")"
+              mkdir -p "$parent"
+              if [ -e "$APP_DIR" ]; then
+                echo "ERROR: $APP_DIR уже есть, но нет .git (или битое дерево). Под root очистите каталог и создайте заново:" >&2
+                echo "  sudo rm -rf \"$APP_DIR\" && sudo mkdir -p \"$APP_DIR\" && sudo chown \"$(whoami):$(whoami)\" \"$APP_DIR\"" >&2
+                exit 1
+              fi
               git clone "$REPO_URL" "$APP_DIR"
             fi
 
             cd "$APP_DIR"
+            if [ ! -w . ]; then
+              echo "ERROR: нет прав на запись в $APP_DIR. На сервере: sudo chown -R $(whoami):$(whoami) $APP_DIR" >&2
+              exit 1
+            fi
+            # Контейнеры с bind-mount могли создать root-owned файлы; git reset вызывает rm и падает с Permission denied
+            if [ -f docker-compose.yml ] || [ -f compose.yaml ] || [ -f compose.yml ]; then
+              docker compose down --remove-orphans 2>/dev/null || true
+            fi
+            git config --global --add safe.directory "$APP_DIR" || true
             git remote set-url origin "$REPO_URL"
             git fetch origin main
             git reset --hard origin/main
@@ -107,6 +122,9 @@ jobs:
 
             # Малый VPS: ограничить параллельную сборку (секрет COMPOSE_PARALLEL_LIMIT или 1).
             export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-1}"
+            # Чтобы bind-mount не создавал файлы от root (__pycache__ и т.д.) — совпадает с пользователем deploy на хосте
+            export HOST_UID="$(id -u)"
+            export HOST_GID="$(id -g)"
 
             if docker compose version >/dev/null 2>&1; then
               docker compose up -d --build --remove-orphans

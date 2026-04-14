@@ -18,6 +18,7 @@ services:
       dockerfile: Dockerfile
     container_name: kakdelatorbot-api
     restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     env_file:
       - .env
     depends_on:
@@ -33,6 +34,7 @@ services:
       dockerfile: Dockerfile
     container_name: kakdelatorbot-bot
     restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     env_file:
       - .env
     depends_on:
@@ -46,6 +48,7 @@ services:
       dockerfile: Dockerfile
     container_name: kakdelatorbot-cron
     restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     env_file:
       - .env
     depends_on:
@@ -60,6 +63,7 @@ services:
       dockerfile: Dockerfile
     container_name: kakdelatorbot-ui
     restart: unless-stopped
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     env_file:
       - .env
     depends_on:
