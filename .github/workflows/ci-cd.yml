@@ -65,9 +65,16 @@ jobs:
           envs: POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,BOT_TOKEN,ALERT_CHAT_ID,ADMIN_PASSWORD,SCHEDULER_POLL_SECONDS,CHECK1_SECONDS,CHECK2_SECONDS,CHECK3_SECONDS,BOT_POLLING_TIMEOUT_SECONDS,BOT_POLLING_READ_TIMEOUT_SECONDS,BOT_POLLING_CONNECT_TIMEOUT_SECONDS,BOT_POLLING_POOL_TIMEOUT_SECONDS,BOT_POLLING_INTERVAL_SECONDS,COMPOSE_PARALLEL_LIMIT
           script_stop: true
           script: |
-            set -eu
+            set -e
+            echo "=== deploy: старт $(date -u '+%Y-%m-%dT%H:%M:%SZ') ==="
+            echo "user=$(whoami) uid=$(id -u) gid=$(id -g)"
             APP_DIR="${{ secrets.DEPLOY_APP_DIR }}"
             REPO_URL="https://x-access-token:${{ secrets.GH_REPO_TOKEN }}@github.com/Closegamer/mdelayrepoplus.git"
+            if [ -z "$APP_DIR" ]; then
+              echo "ERROR: секрет DEPLOY_APP_DIR пуст — добавьте его в Settings → Secrets → Actions" >&2
+              exit 1
+            fi
+            echo "APP_DIR задан (длина ${#APP_DIR} символов)"
 
             if [ ! -d "$APP_DIR/.git" ]; then
               parent="$(dirname "$APP_DIR")"
@@ -90,7 +97,10 @@ jobs:
                 echo "ERROR: $APP_DIR существует и это не каталог. Удалите вручную под root." >&2
                 exit 1
               fi
-              git clone "$REPO_URL" "$APP_DIR"
+              if ! git clone "$REPO_URL" "$APP_DIR"; then
+                echo "ERROR: git clone не удался. Проверьте GH_REPO_TOKEN (доступ к репо) и сеть на сервере." >&2
+                exit 1
+              fi
             fi
 
             cd "$APP_DIR"
@@ -104,8 +114,14 @@ jobs:
             fi
             git config --global --add safe.directory "$APP_DIR" || true
             git remote set-url origin "$REPO_URL"
-            git fetch origin main
-            git reset --hard origin/main
+            if ! git fetch origin main; then
+              echo "ERROR: git fetch не удался" >&2
+              exit 1
+            fi
+            if ! git reset --hard origin/main; then
+              echo "ERROR: git reset --hard не удался. На сервере под root: chown -R $(whoami):$(whoami) $APP_DIR" >&2
+              exit 1
+            fi
 
             write_env() {
               key="$1"
@@ -140,9 +156,17 @@ jobs:
             export HOST_GID="$(id -g)"
 
             if docker compose version >/dev/null 2>&1; then
-              docker compose up -d --build --remove-orphans
+              if ! docker compose up -d --build --remove-orphans; then
+                echo "ERROR: docker compose up завершился с ошибкой" >&2
+                docker compose ps || true
+                exit 1
+              fi
             else
-              docker-compose up -d --build --remove-orphans
+              if ! docker-compose up -d --build --remove-orphans; then
+                echo "ERROR: docker-compose up завершился с ошибкой" >&2
+                docker-compose ps || true
+                exit 1
+              fi
             fi
 
             if docker compose version >/dev/null 2>&1; then
@@ -150,3 +174,4 @@ jobs:
             else
               docker-compose ps
             fi
+            echo "=== deploy: готово ==="
